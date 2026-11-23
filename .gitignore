@@ -1,15 +1,9 @@
-__pycache__/
-*.pyc
+node_modules/
 app/temp/
 app/advanced/temp/
 app/static/samples/
-app/assets/metronomes/
 app/assets/metronomes_list.json
-app/static/metronomes.json
-app/advanced/static/metronomes.json
-app/advanced/static/voices.json
 test_results.txt
 test_metronomes.zip
 .env
 server.log
-.pytest_cache/

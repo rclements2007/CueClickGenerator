@@ -20,6 +20,10 @@ export const ADVANCED_DIR = path.join(APP_DIR, 'advanced');
 export const ADVANCED_STATIC_DIR = path.join(ADVANCED_DIR, 'static');
 export const ADVANCED_TEMP_DIR = path.join(ADVANCED_DIR, 'temp');
 
+// Chord Converter Directories
+export const CHORDS_DIR = path.join(APP_DIR, 'chords');
+export const CHORDS_STATIC_DIR = path.join(CHORDS_DIR, 'static');
+
 export function ensureDirs(): void {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
   fs.mkdirSync(ADVANCED_TEMP_DIR, { recursive: true });

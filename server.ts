@@ -15,6 +15,7 @@ import {
   TEMP_DIR,
   ADVANCED_STATIC_DIR,
   ADVANCED_TEMP_DIR,
+  CHORDS_STATIC_DIR,
   REPO_ROOT,
 } from './src/paths.js';
 import {
@@ -27,6 +28,7 @@ import {
   TrackMixConfig,
 } from './src/audioEngine.js';
 import { generateSpeechEdge } from './src/tts.js';
+import { importChordsFromUrl, lookupSongDuration } from './src/chordImport.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -394,6 +396,56 @@ advancedRouter.post(
 );
 
 app.use('/advanced', advancedRouter);
+
+// ==========================================
+// Chord Converter Routes
+// ==========================================
+
+app.use((req: Request, res: Response, next) => {
+  const pathOnly = req.originalUrl.split('?')[0];
+  if (pathOnly === '/chords') {
+    res.redirect(301, '/chords/');
+    return;
+  }
+  next();
+});
+
+const chordsRouter = express.Router();
+chordsRouter.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(CHORDS_STATIC_DIR, 'index.html'));
+});
+chordsRouter.post('/api/import-url', async (req: Request, res: Response) => {
+  const rawUrl = String(req.body?.url || '').trim();
+  if (!rawUrl) {
+    res.status(400).json({ detail: 'URL is required.' });
+    return;
+  }
+
+  try {
+    const result = await importChordsFromUrl(rawUrl);
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(422).json({ detail: msg });
+  }
+});
+chordsRouter.post('/api/lookup-meta', async (req: Request, res: Response) => {
+  const title = String(req.body?.title || '').trim();
+  const artist = String(req.body?.artist || '').trim();
+  if (!title) {
+    res.json({ duration: '' });
+    return;
+  }
+  try {
+    const duration = await lookupSongDuration(title, artist);
+    res.json({ duration });
+  } catch {
+    res.json({ duration: '' });
+  }
+});
+chordsRouter.use('/static', express.static(CHORDS_STATIC_DIR));
+
+app.use('/chords', chordsRouter);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Cue Track Generator server listening on http://0.0.0.0:${PORT}`);

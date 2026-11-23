@@ -105,10 +105,41 @@
         }
         .error { color: red; }
         .success { color: green; }
+        .mode-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.75rem;
+        }
+        .mode-tab {
+            flex: 1;
+            text-align: center;
+            padding: 0.45rem 0.4rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #555;
+            background: #f4f4f9;
+        }
+        .mode-tab:hover {
+            background: #e9ecef;
+            color: #222;
+        }
+        .mode-tab.active {
+            background: #007bff;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <nav class="mode-tabs">
+            <a href="/" class="mode-tab active">Cue Track</a>
+            <a href="/advanced/" class="mode-tab">Advanced</a>
+            <a href="/chords/" class="mode-tab">Chord Converter</a>
+        </nav>
         <h1>Cue Track Gen</h1>
         <form id="cueForm">
             <div class="form-group">
@@ -174,8 +205,9 @@
             <button type="submit" id="submitBtn">Generate Cue Track</button>
         </form>
         <div id="message"></div>
-        <div style="text-align: center; margin-top: 1rem;">
-            <a href="/advanced/" style="color: #007bff; text-decoration: none; font-size: 0.9rem;">Go to Advanced Mode</a>
+        <div style="text-align: center; margin-top: 1rem; display: flex; justify-content: center; gap: 1rem;">
+            <a href="/advanced/" style="color: #007bff; text-decoration: none; font-size: 0.9rem;">Advanced Mode</a>
+            <a href="/chords/" style="color: #007bff; text-decoration: none; font-size: 0.9rem;">Chord Converter</a>
         </div>
     </div>
 
@@ -244,6 +276,28 @@
 
         loadVoices();
         loadMetronomes();
+
+        // Prefill fields if linked from Chord Converter
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('songName')) {
+            document.getElementById('songName').value = urlParams.get('songName');
+        }
+        if (urlParams.get('annotation')) {
+            document.getElementById('annotation').value = urlParams.get('annotation');
+        }
+        if (urlParams.get('bpm')) {
+            const bpmVal = parseInt(urlParams.get('bpm'), 10);
+            if (!Number.isNaN(bpmVal) && bpmVal >= 40 && bpmVal <= 300) {
+                document.getElementById('bpm').value = String(bpmVal);
+            }
+        }
+        if (urlParams.get('timeSignature')) {
+            const tsSelect = document.getElementById('timeSignature');
+            const tsVal = urlParams.get('timeSignature');
+            if ([...tsSelect.options].some(o => o.value === tsVal)) {
+                tsSelect.value = tsVal;
+            }
+        }
 
         voicePreviewBtn.addEventListener('click', () => {
             playPreview(`/static/samples/${voiceSelect.value}.mp3`);

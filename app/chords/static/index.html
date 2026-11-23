@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BandHelper Chord Converter - Cue Track Generator</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --surface-alt: #262626;
+            --primary-color: #bb86fc;
+            --secondary-color: #03dac6;
+            --text-color: #e0e0e0;
+            --muted-color: #9e9e9e;
+            --border-color: #333;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background-color: var(--surface-color);
+            padding: 0.9rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: #fff;
+        }
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .nav-tab {
+            color: var(--muted-color);
+            text-decoration: none;
+            padding: 0.4rem 0.85rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        .nav-tab:hover {
+            color: #fff;
+            background: var(--surface-alt);
+        }
+        .nav-tab.active {
+            color: #000;
+            background: var(--primary-color);
+        }
+        .toolbar {
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .field label {
+            font-size: 0.75rem;
+            color: var(--muted-color);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        input, select {
+            background: var(--surface-alt);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 0.42rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.88rem;
+        }
+        .meta-bar {
+            background: #171717;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.65rem 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+            gap: 0.75rem;
+        }
+        .transpose-group {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .transpose-val {
+            min-width: 36px;
+            text-align: center;
+            font-weight: 700;
+            color: var(--secondary-color);
+            font-size: 0.92rem;
+        }
+        .btn {
+            background-color: var(--surface-alt);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 0.44rem 0.85rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .btn:hover {
+            border-color: #666;
+            color: #fff;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: #000;
+            border-color: var(--primary-color);
+        }
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: #000;
+            border-color: var(--secondary-color);
+        }
+        .btn-sm {
+            padding: 0.38rem 0.6rem;
+        }
+        .workspace {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 0;
+        }
+        @media (max-width: 900px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+        .pane {
+            display: flex;
+            flex-direction: column;
+            min-height: 480px;
+            border-right: 1px solid var(--border-color);
+        }
+        .pane:last-child {
+            border-right: none;
+        }
+        .pane-header {
+            background: var(--surface-color);
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .pane-title {
+            font-weight: 700;
+            font-size: 0.92rem;
+            color: #fff;
+        }
+        .pane-actions {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+        }
+        textarea, #richOutputBox {
+            flex: 1;
+            width: 100%;
+            background: #0d0d0d;
+            color: #f0f0f0;
+            border: none;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            overflow-y: auto;
+        }
+        #richOutputBox {
+            white-space: pre-wrap;
+            word-break: break-word;
+            user-select: text;
+        }
+        #richOutputBox:empty::before {
+            content: attr(data-placeholder);
+            color: #777;
+        }
+        #richOutputBox .rich-title {
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .output-tabs {
+            display: flex;
+            gap: 0.25rem;
+        }
+        .sub-tab {
+            background: transparent;
+            color: var(--muted-color);
+            border: 1px solid var(--border-color);
+            padding: 0.3rem 0.7rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .sub-tab.active {
+            background: var(--secondary-color);
+            color: #000;
+            border-color: var(--secondary-color);
+        }
+        #previewBox {
+            flex: 1;
+            background: #ffffff;
+            color: #1a1a1a;
+            padding: 1.25rem 1.5rem;
+            overflow-y: auto;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: none;
+        }
+        .preview-meta {
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.6rem;
+            margin-bottom: 1rem;
+        }
+        .preview-meta h2 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.2rem;
+        }
+        .preview-meta-sub {
+            font-size: 0.85rem;
+            color: #555;
+        }
+        .preview-section {
+            margin: 1rem 0 0.35rem 0;
+            font-weight: 700;
+            font-size: 0.92rem;
+            color: #1d4ed8;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .preview-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 0.45rem;
+            min-height: 1.4em;
+        }
+        .preview-pair {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            white-space: pre;
+        }
+        .preview-chord {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #b91c1c;
+            line-height: 1.2;
+            min-height: 1.2em;
+            padding-right: 0.25em;
+        }
+        .preview-lyric {
+            font-size: 0.98rem;
+            line-height: 1.35;
+        }
+        .preview-blank {
+            height: 0.75rem;
+        }
+        .preview-tab {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.82rem;
+            white-space: pre;
+            color: #374151;
+        }
+        .status-msg {
+            font-size: 0.8rem;
+            color: var(--secondary-color);
+            margin-left: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BandHelper Chord Converter</h1>
+        <nav class="nav-tabs">
+            <a href="/" class="nav-tab">Cue Track</a>
+            <a href="/advanced/" class="nav-tab">Advanced Mode</a>
+            <a href="/chords/" class="nav-tab active">Chord Converter</a>
+        </nav>
+    </header>
+
+    <div class="toolbar">
+        <div class="field">
+            <label for="outputFormat">BandHelper Format</label>
+            <select id="outputFormat">
+                <option value="bandhelper_file" selected>BandHelper .chordpro File</option>
+                <option value="bandhelper_lyrics">BandHelper Lyrics Field (Bold Paste)</option>
+                <option value="chords_over_lyrics">Chords Over Lyrics (Aligned Text)</option>
+            </select>
+        </div>
+
+        <div class="field" id="headerStyleField">
+            <label for="headerStyle">Section Titles</label>
+            <select id="headerStyle">
+                <option value="title" selected>Title Case (Chorus)</option>
+                <option value="uppercase">UPPERCASE (CHORUS)</option>
+                <option value="title_colon">With Colon (Chorus:)</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Transpose</label>
+            <div class="transpose-group">
+                <button type="button" class="btn btn-sm" id="transposeDownBtn">-1</button>
+                <span class="transpose-val" id="transposeDisplay">0</span>
+                <button type="button" class="btn btn-sm" id="transposeUpBtn">+1</button>
+                <button type="button" class="btn btn-sm" id="transposeResetBtn">Reset</button>
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="accidentalMode">Accidentals</label>
+            <select id="accidentalMode">
+                <option value="auto">Auto (By Key)</option>
+                <option value="sharp">Prefer Sharps (#)</option>
+                <option value="flat">Prefer Flats (b)</option>
+            </select>
+        </div>
+
+        <div class="field" style="margin-left: auto;">
+            <label>&nbsp;</label>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn" id="guessMetaBtn" title="Infer missing Key, Time, Tuning & look up track Duration">Guess Missing Fields</button>
+                <button type="button" class="btn" id="sendToCueBtn" title="Open Simple Cue Track Generator with Title, Tempo & Time">Use in Cue Track →</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar" style="background: #191919; padding-top: 0.6rem; padding-bottom: 0.6rem;">
+        <div class="field" style="flex: 1; min-width: 260px;">
+            <label for="importUrlInput">Import from URL (Ultimate Guitar / ChordPro / Text)</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="url" id="importUrlInput" style="flex: 1;" placeholder="https://tabs.ultimate-guitar.com/tab/...">
+                <button type="button" class="btn btn-primary" id="importUrlBtn">Import URL</button>
+                <span class="status-msg" id="importStatus" style="margin-left: 0.25rem;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="meta-bar">
+        <div class="field">
+            <label for="metaTitle">Title</label>
+            <input type="text" id="metaTitle" placeholder="Auto-detected or type...">
+        </div>
+        <div class="field">
+            <label for="metaArtist">Artist</label>
+            <input type="text" id="metaArtist" placeholder="Artist">
+        </div>
+        <div class="field">
+            <label for="metaKey">Key</label>
+            <input type="text" id="metaKey" placeholder="e.g. G, Am">
+        </div>
+        <div class="field">
+            <label for="metaTempo">Tempo (BPM)</label>
+            <input type="text" id="metaTempo" placeholder="e.g. 120">
+        </div>
+        <div class="field">
+            <label for="metaTime">Time Sig</label>
+            <input type="text" id="metaTime" placeholder="e.g. 4/4">
+        </div>
+        <div class="field">
+            <label for="metaCapo">Capo</label>
+            <input type="text" id="metaCapo" placeholder="e.g. 2">
+        </div>
+        <div class="field">
+            <label for="metaLeadVox">Lead Vox</label>
+            <input type="text" id="metaLeadVox" placeholder="Lead vocalist">
+        </div>
+        <div class="field">
+            <label for="metaBackupVox">Backup Vox</label>
+            <input type="text" id="metaBackupVox" placeholder="Backup / harmony">
+        </div>
+        <div class="field">
+            <label for="metaTuning">Tuning Note</label>
+            <input type="text" id="metaTuning" placeholder="e.g. Standard, Drop D">
+        </div>
+        <div class="field">
+            <label for="metaDuration">Duration</label>
+            <input type="text" id="metaDuration" placeholder="e.g. 3:45">
+        </div>
+        <div class="field">
+            <label for="metaPreRoll">Auto-Scroll Pre-Roll (s)</label>
+            <input type="number" id="metaPreRoll" value="15" min="0" step="1" placeholder="15">
+        </div>
+        <div class="field">
+            <label for="metaAutoScrollDuration">Auto-Scroll Duration</label>
+            <input type="text" id="metaAutoScrollDuration" placeholder="Duration - Pre-Roll">
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="pane">
+            <div class="pane-header">
+                <span class="pane-title">Input (Ultimate Guitar / Chords Over Text / ChordPro)</span>
+                <div class="pane-actions">
+                    <button type="button" class="btn btn-sm" id="uploadFileBtn">Open File</button>
+                    <input type="file" id="chordFileInput" accept=".txt,.cho,.chopro,.chordpro,.pro,.onsong" style="display:none;">
+                    <button type="button" class="btn btn-sm" id="loadSampleBtn">Load Sample</button>
+                    <button type="button" class="btn btn-sm" id="clearBtn">Clear</button>
+                </div>
+            </div>
+            <textarea id="inputArea" placeholder="Paste chords-over-lyrics (Ultimate Guitar style) or ChordPro text here...
+
+Example:
+Title: Amazing Grace
+Artist: John Newton
+Key: G
+Tempo: 72
+Time: 3/4
+
+[Verse 1]
+G              C       G
+Amazing grace! How sweet the sound
+                       D
+That saved a wretch like me"></textarea>
+        </div>
+
+        <div class="pane">
+            <div class="pane-header">
+                <div class="output-tabs">
+                    <button type="button" class="sub-tab active" id="viewCodeTab">BandHelper Output</button>
+                    <button type="button" class="sub-tab" id="viewPreviewTab">Sheet Preview</button>
+                    <span class="status-msg" id="copyStatus"></span>
+                </div>
+                <div class="pane-actions">
+                    <button type="button" class="btn btn-sm btn-secondary" id="copyBtn">Copy Output</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="downloadBtn">Download .chordpro</button>
+                    <button type="button" class="btn btn-sm" id="exportZipBtn" title="Download .zip containing .chordpro for BandHelper Website → Repertoire → Documents → Batch Import (Add New Songs)">Export Song (.zip)</button>
+                </div>
+            </div>
+            <div id="richOutputBox" style="display: none;" data-placeholder="Converted BandHelper output with bolded titles will appear here..."></div>
+            <textarea id="outputArea" readonly placeholder="Converted BandHelper .chordpro output will appear here..."></textarea>
+            <div id="previewBox"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import {
+            parseChordSheet,
+            transposeDocument,
+            formatDocument,
+            formatBandHelperHtml,
+            transposeKey,
+            createSingleFileZip,
+            computeAutoScrollDuration,
+            inferMissingMetadata,
+        } from '/chords/static/chords.js';
+
+        const inputArea = document.getElementById('inputArea');
+        const outputArea = document.getElementById('outputArea');
+        const richOutputBox = document.getElementById('richOutputBox');
+        const previewBox = document.getElementById('previewBox');
+
+        const outputFormat = document.getElementById('outputFormat');
+        const headerStyleField = document.getElementById('headerStyleField');
+        const headerStyle = document.getElementById('headerStyle');
+        const accidentalMode = document.getElementById('accidentalMode');
+
+        const transposeDownBtn = document.getElementById('transposeDownBtn');
+        const transposeUpBtn = document.getElementById('transposeUpBtn');
+        const transposeResetBtn = document.getElementById('transposeResetBtn');
+        const transposeDisplay = document.getElementById('transposeDisplay');
+
+        const metaTitle = document.getElementById('metaTitle');
+        const metaArtist = document.getElementById('metaArtist');
+        const metaKey = document.getElementById('metaKey');
+        const metaTempo = document.getElementById('metaTempo');
+        const metaTime = document.getElementById('metaTime');
+        const metaCapo = document.getElementById('metaCapo');
+        const metaLeadVox = document.getElementById('metaLeadVox');
+        const metaBackupVox = document.getElementById('metaBackupVox');
+        const metaTuning = document.getElementById('metaTuning');
+        const metaDuration = document.getElementById('metaDuration');
+        const metaPreRoll = document.getElementById('metaPreRoll');
+        const metaAutoScrollDuration = document.getElementById('metaAutoScrollDuration');
+
+        const viewCodeTab = document.getElementById('viewCodeTab');
+        const viewPreviewTab = document.getElementById('viewPreviewTab');
+        const copyBtn = document.getElementById('copyBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const exportZipBtn = document.getElementById('exportZipBtn');
+        const copyStatus = document.getElementById('copyStatus');
+        const loadSampleBtn = document.getElementById('loadSampleBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const uploadFileBtn = document.getElementById('uploadFileBtn');
+        const chordFileInput = document.getElementById('chordFileInput');
+        const guessMetaBtn = document.getElementById('guessMetaBtn');
+        const sendToCueBtn = document.getElementById('sendToCueBtn');
+        const importUrlInput = document.getElementById('importUrlInput');
+        const importUrlBtn = document.getElementById('importUrlBtn');
+        const importStatus = document.getElementById('importStatus');
+
+        let semitones = 0;
+        let lastDetectedMeta = {
+            title: '', artist: '', key: '', tempo: '', time: '', capo: '',
+            leadVox: '', backupVox: '', tuning: '', duration: '', preRoll: '', autoScrollDuration: '',
+        };
+        let lastRichHtml = '';
+        let activeOutputTab = 'code';
+        let autoScrollManuallyEdited = false;
+
+        function recalculateAutoScrollDuration() {
+            if (autoScrollManuallyEdited) return;
+            metaAutoScrollDuration.value = computeAutoScrollDuration(
+                metaDuration.value,
+                metaPreRoll.value
+            );
+        }
+
+        function syncDetectedMetadata(parsedMeta) {
+            // Only overwrite fields that are empty or still matched the previous auto-detected value
+            if (!metaTitle.value || metaTitle.value === lastDetectedMeta.title) {
+                metaTitle.value = parsedMeta.title || '';
+            }
+            if (!metaArtist.value || metaArtist.value === lastDetectedMeta.artist) {
+                metaArtist.value = parsedMeta.artist || '';
+            }
+            if (!metaKey.value || metaKey.value === lastDetectedMeta.key) {
+                metaKey.value = parsedMeta.key || '';
+            }
+            if (!metaTempo.value || metaTempo.value === lastDetectedMeta.tempo) {
+                metaTempo.value = parsedMeta.tempo || '';
+            }
+            if (!metaTime.value || metaTime.value === lastDetectedMeta.time) {
+                metaTime.value = parsedMeta.time || '';
+            }
+            if (!metaCapo.value || metaCapo.value === lastDetectedMeta.capo) {
+                metaCapo.value = parsedMeta.capo || '';
+            }
+            if (!metaLeadVox.value || metaLeadVox.value === lastDetectedMeta.leadVox) {
+                metaLeadVox.value = parsedMeta.leadVox || '';
+            }
+            if (!metaBackupVox.value || metaBackupVox.value === lastDetectedMeta.backupVox) {
+                metaBackupVox.value = parsedMeta.backupVox || '';
+            }
+            if (!metaTuning.value || metaTuning.value === lastDetectedMeta.tuning) {
+                metaTuning.value = parsedMeta.tuning || '';
+            }
+            if (!metaDuration.value || metaDuration.value === lastDetectedMeta.duration) {
+                metaDuration.value = parsedMeta.duration || '';
+            }
+            if (parsedMeta.preRoll && (!metaPreRoll.value || metaPreRoll.value === '15' || metaPreRoll.value === lastDetectedMeta.preRoll)) {
+                metaPreRoll.value = parsedMeta.preRoll;
+            }
+            if (parsedMeta.autoScrollDuration) {
+                metaAutoScrollDuration.value = parsedMeta.autoScrollDuration;
+                autoScrollManuallyEdited = true;
+            } else {
+                autoScrollManuallyEdited = false;
+                recalculateAutoScrollDuration();
+            }
+            lastDetectedMeta = { ...parsedMeta };
+        }
+
+        function renderPreview(doc, overrideMeta) {
+            previewBox.innerHTML = '';
+
+            const title = overrideMeta.title || doc.metadata.title;
+            const artist = overrideMeta.artist || doc.metadata.artist;
+            const key = overrideMeta.key || doc.metadata.key;
+            const tempo = overrideMeta.tempo || doc.metadata.tempo;
+            const time = overrideMeta.time || doc.metadata.time;
+            const capo = overrideMeta.capo || doc.metadata.capo;
+            const leadVox = overrideMeta.leadVox || doc.metadata.leadVox;
+            const backupVox = overrideMeta.backupVox || doc.metadata.backupVox;
+            const tuning = overrideMeta.tuning || doc.metadata.tuning;
+            const duration = overrideMeta.duration || doc.metadata.duration;
+            const preRoll = overrideMeta.preRoll || doc.metadata.preRoll;
+            const autoScrollDuration = overrideMeta.autoScrollDuration || doc.metadata.autoScrollDuration;
+
+            if (title || artist || key || tempo || time || capo || leadVox || backupVox || tuning || duration) {
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'preview-meta';
+                if (title) {
+                    const h2 = document.createElement('h2');
+                    h2.textContent = title;
+                    metaDiv.appendChild(h2);
+                }
+                const parts = [];
+                if (artist) parts.push(artist);
+                if (key) parts.push(`Key: ${key}`);
+                if (tempo) parts.push(`Tempo: ${tempo} BPM`);
+                if (time) parts.push(`Time: ${time}`);
+                if (duration) parts.push(`Duration: ${duration}`);
+                if (autoScrollDuration) parts.push(`Auto-Scroll: ${autoScrollDuration} (${preRoll || '0'}s pre-roll)`);
+                if (capo) parts.push(`Capo: ${capo}`);
+                if (tuning) parts.push(`Tuning: ${tuning}`);
+                if (leadVox) parts.push(`Lead Vox: ${leadVox}`);
+                if (backupVox) parts.push(`Backup Vox: ${backupVox}`);
+                if (parts.length > 0) {
+                    const sub = document.createElement('div');
+                    sub.className = 'preview-meta-sub';
+                    sub.textContent = parts.join('  •  ');
+                    metaDiv.appendChild(sub);
+                }
+                previewBox.appendChild(metaDiv);
+            }
+
+            for (const entry of doc.entries) {
+                if (entry.kind === 'blank') {
+                    const b = document.createElement('div');
+                    b.className = 'preview-blank';
+                    previewBox.appendChild(b);
+                } else if (entry.kind === 'section_start' || entry.kind === 'section_label') {
+                    const sec = document.createElement('div');
+                    sec.className = 'preview-section';
+                    sec.textContent = entry.label;
+                    previewBox.appendChild(sec);
+                } else if (entry.kind === 'comment') {
+                    const c = document.createElement('div');
+                    c.style.fontStyle = 'italic';
+                    c.style.color = '#6b7280';
+                    c.style.marginBottom = '0.4rem';
+                    c.textContent = entry.text;
+                    previewBox.appendChild(c);
+                } else if (entry.kind === 'tab_line') {
+                    const t = document.createElement('div');
+                    t.className = 'preview-tab';
+                    t.textContent = entry.text;
+                    previewBox.appendChild(t);
+                } else if (entry.kind === 'line') {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.className = 'preview-line';
+
+                    // Pair each [Chord] with the text chunk that immediately follows it
+                    const segs = entry.segments;
+                    let idx = 0;
+                    const hasChords = segs.some((s) => s.type === 'chord');
+
+                    if (!hasChords) {
+                        const pair = document.createElement('span');
+                        pair.className = 'preview-pair';
+                        const lyr = document.createElement('span');
+                        lyr.className = 'preview-lyric';
+                        lyr.textContent = segs.map((s) => s.value).join('');
+                        pair.appendChild(lyr);
+                        lineDiv.appendChild(pair);
+                    } else {
+                        while (idx < segs.length) {
+                            const cur = segs[idx];
+                            if (cur.type === 'chord') {
+                                let lyricChunk = '';
+                                if (idx + 1 < segs.length && segs[idx + 1].type === 'text') {
+                                    lyricChunk = segs[idx + 1].value;
+                                    idx += 2;
+                                } else {
+                                    idx += 1;
+                                }
+                                const pair = document.createElement('span');
+                                pair.className = 'preview-pair';
+                                const ch = document.createElement('span');
+                                ch.className = 'preview-chord';
+                                ch.textContent = cur.value;
+                                const lyr = document.createElement('span');
+                                lyr.className = 'preview-lyric';
+                                lyr.textContent = lyricChunk || ' ';
+                                pair.appendChild(ch);
+                                pair.appendChild(lyr);
+                                lineDiv.appendChild(pair);
+                            } else {
+                                const pair = document.createElement('span');
+                                pair.className = 'preview-pair';
+                                const ch = document.createElement('span');
+                                ch.className = 'preview-chord';
+                                ch.textContent = ' ';
+                                const lyr = document.createElement('span');
+                                lyr.className = 'preview-lyric';
+                                lyr.textContent = cur.value;
+                                pair.appendChild(ch);
+                                pair.appendChild(lyr);
+                                lineDiv.appendChild(pair);
+                                idx += 1;
+                            }
+                        }
+                    }
+                    previewBox.appendChild(lineDiv);
+                }
+            }
+        }
+
+        function renderRichOutput(doc, style) {
+            richOutputBox.innerHTML = '';
+            if (!doc.entries || doc.entries.length === 0) return;
+
+            const fmtTitle = (label) => {
+                if (style === 'uppercase') return label.toUpperCase();
+                if (style === 'title_colon') return `${label}:`;
+                return label;
+            };
+
+            const lines = [];
+            for (const entry of doc.entries) {
+                if (entry.kind === 'blank') {
+                    if (lines.length > 0 && lines[lines.length - 1] !== null) {
+                        lines.push(null);
+                    }
+                } else if (entry.kind === 'section_start' || entry.kind === 'section_label') {
+                    while (lines.length > 0 && lines[lines.length - 1] === null) {
+                        lines.pop();
+                    }
+                    if (lines.length > 0) {
+                        lines.push(null, null);
+                    }
+                    const b = document.createElement('b');
+                    b.className = 'rich-title';
+                    b.textContent = fmtTitle(entry.label);
+                    lines.push(b);
+                } else if (entry.kind === 'section_end') {
+                    // No end tags
+                } else if (entry.kind === 'comment') {
+                    const i = document.createElement('i');
+                    i.textContent = entry.text;
+                    lines.push(i);
+                } else if (entry.kind === 'tab_line') {
+                    lines.push(document.createTextNode(entry.text));
+                } else if (entry.kind === 'line') {
+                    const text = entry.segments
+                        .map((seg) => (seg.type === 'chord' ? `[${seg.value}]` : seg.value))
+                        .join('');
+                    lines.push(document.createTextNode(text));
+                }
+            }
+
+            while (lines.length > 0 && lines[lines.length - 1] === null) {
+                lines.pop();
+            }
+
+            lines.forEach((node, idx) => {
+                if (idx > 0) {
+                    richOutputBox.appendChild(document.createElement('br'));
+                }
+                if (node !== null) {
+                    richOutputBox.appendChild(node);
+                }
+            });
+        }
+
+        function updateOutputVisibility() {
+            const fmt = outputFormat.value;
+            if (activeOutputTab === 'preview') {
+                richOutputBox.style.display = 'none';
+                outputArea.style.display = 'none';
+                previewBox.style.display = 'block';
+            } else if (fmt === 'bandhelper_lyrics') {
+                richOutputBox.style.display = 'block';
+                outputArea.style.display = 'none';
+                previewBox.style.display = 'none';
+            } else {
+                richOutputBox.style.display = 'none';
+                outputArea.style.display = 'block';
+                previewBox.style.display = 'none';
+            }
+        }
+
+        function convertNow(syncMeta = false) {
+            const raw = inputArea.value;
+            const parsed = parseChordSheet(raw);
+            if (syncMeta) {
+                syncDetectedMetadata(parsed.metadata);
+            }
+
+            const transposed = transposeDocument(parsed, semitones, accidentalMode.value);
+            const effectiveKey = metaKey.value.trim()
+                ? transposeKey(metaKey.value.trim(), semitones, accidentalMode.value)
+                : transposed.metadata.key;
+
+            const overrideMeta = {
+                title: metaTitle.value.trim(),
+                artist: metaArtist.value.trim(),
+                key: effectiveKey,
+                tempo: metaTempo.value.trim(),
+                time: metaTime.value.trim(),
+                capo: metaCapo.value.trim(),
+                leadVox: metaLeadVox.value.trim(),
+                backupVox: metaBackupVox.value.trim(),
+                tuning: metaTuning.value.trim(),
+                duration: metaDuration.value.trim(),
+                preRoll: metaPreRoll.value.trim(),
+                autoScrollDuration: metaAutoScrollDuration.value.trim(),
+            };
+
+            const fmt = outputFormat.value;
+            headerStyleField.style.display = fmt !== 'chords_over_lyrics' ? 'flex' : 'none';
+            downloadBtn.textContent = fmt === 'bandhelper_file' ? 'Download .chordpro' : 'Download .txt';
+
+            const formatted = formatDocument(transposed, {
+                format: fmt,
+                headerStyle: headerStyle.value,
+                zipHeaderMode: 'comment',
+                overrideMeta,
+            });
+
+            outputArea.value = formatted;
+            lastRichHtml = formatBandHelperHtml(transposed, { headerStyle: headerStyle.value });
+            renderRichOutput(transposed, headerStyle.value);
+            renderPreview(transposed, overrideMeta);
+            updateOutputVisibility();
+        }
+
+        inputArea.addEventListener('input', () => convertNow(true));
+        [metaDuration, metaPreRoll].forEach((el) => {
+            el.addEventListener('input', () => {
+                autoScrollManuallyEdited = false;
+                recalculateAutoScrollDuration();
+                convertNow(false);
+            });
+            el.addEventListener('change', () => {
+                autoScrollManuallyEdited = false;
+                recalculateAutoScrollDuration();
+                convertNow(false);
+            });
+        });
+        metaAutoScrollDuration.addEventListener('input', () => {
+            autoScrollManuallyEdited = metaAutoScrollDuration.value.trim().length > 0;
+            convertNow(false);
+        });
+        [
+            outputFormat, headerStyle, accidentalMode,
+            metaTitle, metaArtist, metaKey, metaTempo, metaTime, metaCapo,
+            metaLeadVox, metaBackupVox, metaTuning,
+        ].forEach((el) => {
+            el.addEventListener('input', () => convertNow(false));
+            el.addEventListener('change', () => convertNow(false));
+        });
+
+        function updateTransposeUI() {
+            transposeDisplay.textContent = semitones > 0 ? `+${semitones}` : String(semitones);
+            convertNow(false);
+        }
+
+        transposeDownBtn.addEventListener('click', () => {
+            semitones = semitones <= -11 ? 0 : semitones - 1;
+            updateTransposeUI();
+        });
+        transposeUpBtn.addEventListener('click', () => {
+            semitones = semitones >= 11 ? 0 : semitones + 1;
+            updateTransposeUI();
+        });
+        transposeResetBtn.addEventListener('click', () => {
+            semitones = 0;
+            updateTransposeUI();
+        });
+
+        viewCodeTab.addEventListener('click', () => {
+            activeOutputTab = 'code';
+            viewCodeTab.classList.add('active');
+            viewPreviewTab.classList.remove('active');
+            updateOutputVisibility();
+        });
+        viewPreviewTab.addEventListener('click', () => {
+            activeOutputTab = 'preview';
+            viewPreviewTab.classList.add('active');
+            viewCodeTab.classList.remove('active');
+            updateOutputVisibility();
+        });
+
+        function fallbackRichCopy(html, text) {
+            const selection = window.getSelection();
+            const prevRanges = [];
+            if (selection) {
+                for (let i = 0; i < selection.rangeCount; i++) {
+                    prevRanges.push(selection.getRangeAt(i));
+                }
+            }
+
+            const onCopy = (e) => {
+                e.preventDefault();
+                if (e.clipboardData) {
+                    if (html) e.clipboardData.setData('text/html', html);
+                    e.clipboardData.setData('text/plain', text);
+                }
+            };
+            document.addEventListener('copy', onCopy, { once: true });
+
+            try {
+                if (selection && richOutputBox.style.display !== 'none') {
+                    const range = document.createRange();
+                    range.selectNodeContents(richOutputBox);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    document.execCommand('copy');
+                } else {
+                    outputArea.style.display = 'block';
+                    outputArea.select();
+                    document.execCommand('copy');
+                }
+            } finally {
+                document.removeEventListener('copy', onCopy);
+                if (selection) {
+                    selection.removeAllRanges();
+                    prevRanges.forEach((r) => selection.addRange(r));
+                }
+                updateOutputVisibility();
+            }
+        }
+
+        copyBtn.addEventListener('click', async () => {
+            if (!outputArea.value) return;
+            const isRich = outputFormat.value === 'bandhelper_lyrics';
+            try {
+                if (isRich && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+                    const htmlBlob = new Blob([lastRichHtml], { type: 'text/html' });
+                    const textBlob = new Blob([outputArea.value], { type: 'text/plain' });
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob }),
+                    ]);
+                } else if (!isRich && navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(outputArea.value);
+                } else {
+                    fallbackRichCopy(isRich ? lastRichHtml : '', outputArea.value);
+                }
+                copyStatus.textContent = isRich ? 'Copied (with bold titles)!' : 'Copied!';
+                setTimeout(() => { copyStatus.textContent = ''; }, 2000);
+            } catch {
+                fallbackRichCopy(isRich ? lastRichHtml : '', outputArea.value);
+                copyStatus.textContent = isRich ? 'Copied (with bold titles)!' : 'Copied!';
+                setTimeout(() => { copyStatus.textContent = ''; }, 2000);
+            }
+        });
+
+        function getSafeBaseName() {
+            return (metaTitle.value.trim() || 'song')
+                .replace(/[^a-zA-Z0-9_-]+/g, '_')
+                .replace(/^_+|_+$/g, '') || 'song';
+        }
+
+        function triggerDownload(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            const text = outputArea.value;
+            if (!text) return;
+            const baseName = getSafeBaseName();
+            const ext = outputFormat.value === 'bandhelper_file' ? 'chordpro' : 'txt';
+            const blob = new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' });
+            triggerDownload(blob, `${baseName}.${ext}`);
+        });
+
+        exportZipBtn.addEventListener('click', () => {
+            const raw = inputArea.value;
+            if (!raw.trim()) return;
+            const parsed = parseChordSheet(raw);
+            const transposed = transposeDocument(parsed, semitones, accidentalMode.value);
+            const effectiveKey = metaKey.value.trim()
+                ? transposeKey(metaKey.value.trim(), semitones, accidentalMode.value)
+                : transposed.metadata.key;
+
+            const chordproText = formatDocument(transposed, {
+                format: 'bandhelper_file',
+                headerStyle: headerStyle.value,
+                zipHeaderMode: 'comment',
+                overrideMeta: {
+                    title: metaTitle.value.trim() || parsed.metadata.title || 'Untitled Song',
+                    artist: metaArtist.value.trim(),
+                    key: effectiveKey,
+                    tempo: metaTempo.value.trim(),
+                    time: metaTime.value.trim(),
+                    capo: metaCapo.value.trim(),
+                    leadVox: metaLeadVox.value.trim(),
+                    backupVox: metaBackupVox.value.trim(),
+                    tuning: metaTuning.value.trim(),
+                    duration: metaDuration.value.trim(),
+                    preRoll: metaPreRoll.value.trim(),
+                    autoScrollDuration: metaAutoScrollDuration.value.trim(),
+                },
+            });
+
+            const baseName = getSafeBaseName();
+            const zipBytes = createSingleFileZip(`${baseName}.chordpro`, chordproText + '\n');
+            const blob = new Blob([zipBytes], { type: 'application/zip' });
+            triggerDownload(blob, `${baseName}_bandhelper.zip`);
+            copyStatus.textContent = 'Upload .zip → Documents → Batch Import (Add New Songs)';
+            setTimeout(() => { copyStatus.textContent = ''; }, 5000);
+        });
+
+        uploadFileBtn.addEventListener('click', () => chordFileInput.click());
+        chordFileInput.addEventListener('change', async () => {
+            const file = chordFileInput.files?.[0];
+            if (!file) return;
+            inputArea.value = await file.text();
+            semitones = 0;
+            transposeDisplay.textContent = '0';
+            convertNow(true);
+            chordFileInput.value = '';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            inputArea.value = '';
+            metaTitle.value = '';
+            metaArtist.value = '';
+            metaKey.value = '';
+            metaTempo.value = '';
+            metaTime.value = '';
+            metaCapo.value = '';
+            metaLeadVox.value = '';
+            metaBackupVox.value = '';
+            metaTuning.value = '';
+            metaDuration.value = '';
+            metaPreRoll.value = '15';
+            metaAutoScrollDuration.value = '';
+            autoScrollManuallyEdited = false;
+            lastDetectedMeta = {
+                title: '', artist: '', key: '', tempo: '', time: '', capo: '',
+                leadVox: '', backupVox: '', tuning: '', duration: '', preRoll: '', autoScrollDuration: '',
+            };
+            semitones = 0;
+            transposeDisplay.textContent = '0';
+            convertNow(false);
+        });
+
+        loadSampleBtn.addEventListener('click', () => {
+            inputArea.value = `Title: Wagon Wheel
+Artist: Old Crow Medicine Show
+Key: A
+Tempo: 148
+Time: 4/4
+Capo: 2
+Duration: 3:55
+
+[Intro]
+G   D   Em   C
+G   D   C    C
+
+[Verse 1]
+G                 D              Em            C
+Headed down south to the land of the pines
+G                  D               C
+I'm thumbing my way into North Caroline
+G                D               Em             C
+Staring up the road and pray to God I see headlights
+
+[Chorus]
+   G             D            Em        C
+So rock me mama like a wagon wheel
+G             D         C
+Rock me mama any way you feel
+G     D   C
+Hey, mama rock me`;
+            semitones = 0;
+            transposeDisplay.textContent = '0';
+            metaTitle.value = '';
+            metaArtist.value = '';
+            metaKey.value = '';
+            metaTempo.value = '';
+            metaTime.value = '';
+            metaCapo.value = '';
+            metaLeadVox.value = '';
+            metaBackupVox.value = '';
+            metaTuning.value = '';
+            metaDuration.value = '';
+            metaPreRoll.value = '15';
+            metaAutoScrollDuration.value = '';
+            autoScrollManuallyEdited = false;
+            lastDetectedMeta = {
+                title: '', artist: '', key: '', tempo: '', time: '', capo: '',
+                leadVox: '', backupVox: '', tuning: '', duration: '', preRoll: '', autoScrollDuration: '',
+            };
+            convertNow(true);
+        });
+
+        async function handleUrlImport() {
+            const url = importUrlInput.value.trim();
+            if (!url) return;
+
+            importUrlBtn.disabled = true;
+            importUrlBtn.textContent = 'Importing...';
+            importStatus.style.color = 'var(--secondary-color)';
+            importStatus.textContent = '';
+
+            try {
+                const resp = await fetch('/chords/api/import-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url }),
+                });
+
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data?.detail || 'Failed to import from URL');
+                }
+
+                inputArea.value = data.content || '';
+                semitones = 0;
+                transposeDisplay.textContent = '0';
+
+                // Parse content too so any embedded directives/headers merge cleanly
+                const parsed = parseChordSheet(inputArea.value);
+                metaTitle.value = data.title || parsed.metadata.title || '';
+                metaArtist.value = data.artist || parsed.metadata.artist || '';
+                metaKey.value = data.key || parsed.metadata.key || '';
+                metaTempo.value = data.tempo || parsed.metadata.tempo || '';
+                metaTime.value = data.time || parsed.metadata.time || '';
+                metaCapo.value = data.capo || parsed.metadata.capo || '';
+                metaLeadVox.value = parsed.metadata.leadVox || '';
+                metaBackupVox.value = parsed.metadata.backupVox || '';
+                metaTuning.value = data.tuning || parsed.metadata.tuning || '';
+                metaDuration.value = data.duration || parsed.metadata.duration || '';
+                metaPreRoll.value = parsed.metadata.preRoll || '15';
+                autoScrollManuallyEdited = false;
+
+                // Best-guess any fields still missing after source import
+                const guessedFields = applyBestGuessToEmptyFields(parsed, inputArea.value);
+                if (data.duration && !parsed.metadata.duration) {
+                    guessedFields.push(`Duration (${data.duration})`);
+                }
+
+                if (parsed.metadata.autoScrollDuration) {
+                    metaAutoScrollDuration.value = parsed.metadata.autoScrollDuration;
+                    autoScrollManuallyEdited = true;
+                } else {
+                    recalculateAutoScrollDuration();
+                }
+
+                lastDetectedMeta = {
+                    title: metaTitle.value,
+                    artist: metaArtist.value,
+                    key: metaKey.value,
+                    tempo: metaTempo.value,
+                    time: metaTime.value,
+                    capo: metaCapo.value,
+                    leadVox: metaLeadVox.value,
+                    backupVox: metaBackupVox.value,
+                    tuning: metaTuning.value,
+                    duration: metaDuration.value,
+                    preRoll: metaPreRoll.value,
+                    autoScrollDuration: metaAutoScrollDuration.value,
+                };
+
+                convertNow(false);
+                const baseMsg = data.note || (metaTitle.value ? `Imported "${metaTitle.value}"` : 'Imported!');
+                importStatus.textContent = guessedFields.length > 0
+                    ? `${baseMsg} • Guessed: ${guessedFields.join(', ')}`
+                    : baseMsg;
+            } catch (err) {
+                importStatus.style.color = '#cf6679';
+                importStatus.textContent = err.message || 'Import failed';
+            } finally {
+                importUrlBtn.disabled = false;
+                importUrlBtn.textContent = 'Import URL';
+            }
+        }
+
+        function applyBestGuessToEmptyFields(parsedDoc, rawText) {
+            const guessed = inferMissingMetadata(parsedDoc, rawText);
+            const filled = [];
+            if (!metaKey.value.trim() && guessed.key) {
+                metaKey.value = guessed.key;
+                filled.push(`Key (${guessed.key})`);
+            }
+            if (!metaTempo.value.trim() && guessed.tempo) {
+                metaTempo.value = guessed.tempo;
+                filled.push(`Tempo (${guessed.tempo})`);
+            }
+            if (!metaTime.value.trim() && guessed.time) {
+                metaTime.value = guessed.time;
+                filled.push(`Time (${guessed.time})`);
+            }
+            if (!metaCapo.value.trim() && guessed.capo) {
+                metaCapo.value = guessed.capo;
+                filled.push(`Capo (${guessed.capo})`);
+            }
+            if (!metaTuning.value.trim() && guessed.tuning) {
+                metaTuning.value = guessed.tuning;
+                filled.push(`Tuning (${guessed.tuning})`);
+            }
+            return filled;
+        }
+
+        guessMetaBtn.addEventListener('click', async () => {
+            const parsed = parseChordSheet(inputArea.value);
+            const filled = applyBestGuessToEmptyFields(parsed, inputArea.value);
+
+            if (!metaDuration.value.trim() && metaTitle.value.trim()) {
+                guessMetaBtn.disabled = true;
+                guessMetaBtn.textContent = 'Guessing...';
+                try {
+                    const resp = await fetch('/chords/api/lookup-meta', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: metaTitle.value.trim(),
+                            artist: metaArtist.value.trim(),
+                        }),
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (data.duration) {
+                            metaDuration.value = data.duration;
+                            filled.push(`Duration (${data.duration})`);
+                        }
+                    }
+                } catch {
+                    // ignore network error
+                } finally {
+                    guessMetaBtn.disabled = false;
+                    guessMetaBtn.textContent = 'Guess Missing Fields';
+                }
+            }
+
+            if (!autoScrollManuallyEdited) {
+                recalculateAutoScrollDuration();
+            }
+            convertNow(false);
+
+            copyStatus.textContent = filled.length > 0
+                ? `Guessed: ${filled.join(', ')}`
+                : 'No additional missing fields found';
+            setTimeout(() => { copyStatus.textContent = ''; }, 4500);
+        });
+
+        importUrlBtn.addEventListener('click', handleUrlImport);
+        importUrlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleUrlImport();
+            }
+        });
+
+        sendToCueBtn.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            if (metaTitle.value.trim()) params.set('songName', metaTitle.value.trim());
+            if (metaTempo.value.trim()) params.set('bpm', metaTempo.value.trim());
+            if (metaTime.value.trim()) params.set('timeSignature', metaTime.value.trim());
+            if (metaKey.value.trim()) params.set('annotation', `Key of ${metaKey.value.trim()}`);
+            const qs = params.toString();
+            window.location.href = qs ? `/?${qs}` : '/';
+        });
+    </script>
+</body>
+</html>
