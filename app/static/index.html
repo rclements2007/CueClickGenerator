@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cue Track Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #666;
+            font-weight: 600;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .duration-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .duration-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+        }
+        .duration-label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .input-with-preview {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .input-with-preview select {
+            flex-grow: 1;
+        }
+        .play-btn {
+            padding: 0.6rem;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 50px;
+            transition: background 0.2s;
+        }
+        .play-btn:hover {
+            background-color: #218838;
+        }
+        button[type="submit"] {
+            width: 100%;
+            padding: 0.8rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+        button[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        button[type="submit"]:disabled {
+            background-color: #ccc;
+        }
+        #message {
+            margin-top: 1rem;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cue Track Gen</h1>
+        <form id="cueForm">
+            <div class="form-group">
+                <label for="songName">Song Name</label>
+                <input type="text" id="songName" name="songName" required placeholder="e.g. Bohemian Rhapsody">
+            </div>
+            <div class="form-group">
+                <label for="annotation">Annotation (Optional)</label>
+                <input type="text" id="annotation" name="annotation" placeholder="e.g. Guitar and vocals start">
+            </div>
+            <div class="form-group">
+                <label for="bpm">BPM</label>
+                <input type="number" id="bpm" name="bpm" value="120" min="40" max="300" required>
+            </div>
+            <div class="form-group">
+                <label for="timeSignature">Time Signature</label>
+                <select id="timeSignature" name="timeSignature">
+                    <option value="4/4" selected>4/4 (Default)</option>
+                    <option value="3/4">3/4</option>
+                    <option value="6/8">6/8</option>
+                    <option value="8/8">8/8</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Duration</label>
+                <div class="duration-group">
+                    <div class="duration-item">
+                        <input type="number" id="minutes" name="minutes" value="3" min="0" placeholder="Min" required>
+                        <span class="duration-label">min</span>
+                    </div>
+                    <div class="duration-item">
+                        <input type="number" id="seconds" name="seconds" value="0" min="0" max="59" placeholder="Sec" required>
+                        <span class="duration-label">sec</span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="voice">Voice</label>
+                <div class="input-with-preview">
+                    <select id="voice" name="voice">
+                        <!-- Voices will be loaded here -->
+                    </select>
+                    <button type="button" class="play-btn" id="voicePreviewBtn" title="Preview Voice">▶</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="sound">Metronome Sound</label>
+                <div class="input-with-preview">
+                    <select id="sound" name="sound">
+                        <!-- Metronomes will be loaded here -->
+                    </select>
+                    <button type="button" class="play-btn" id="soundPreviewBtn" title="Preview Sound">▶</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="panning">Panning</label>
+                <select id="panning" name="panning">
+                    <option value="-1.0" selected>All the way Left (Default)</option>
+                    <option value="0">Center</option>
+                    <option value="1.0">All the way Right</option>
+                </select>
+            </div>
+            <button type="submit" id="submitBtn">Generate Cue Track</button>
+        </form>
+        <div id="message"></div>
+        <div style="text-align: center; margin-top: 1rem;">
+            <a href="/advanced/" style="color: #007bff; text-decoration: none; font-size: 0.9rem;">Go to Advanced Mode</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('cueForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const messageDiv = document.getElementById('message');
+
+        const voiceSelect = document.getElementById('voice');
+        const voicePreviewBtn = document.getElementById('voicePreviewBtn');
+
+        const soundSelect = document.getElementById('sound');
+        const soundPreviewBtn = document.getElementById('soundPreviewBtn');
+
+        let currentAudio = null;
+
+        function playPreview(src) {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            currentAudio = new Audio(src);
+            currentAudio.play().catch(err => console.error("Playback failed", err));
+        }
+
+        // Load voices
+        async function loadVoices() {
+            try {
+                const response = await fetch('/static/voices.json');
+                const voices = await response.json();
+                voices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    // Default to Brian
+                    if (voice.id === 'en-US-SteffanNeural') {
+                        option.selected = true;
+                    }
+                    voiceSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Failed to load voices', err);
+            }
+        }
+
+        // Load metronomes
+        async function loadMetronomes() {
+            try {
+                const response = await fetch('/static/metronomes.json');
+                const metronomes = await response.json();
+                metronomes.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    // Clean up the name for display
+                    option.textContent = file.replace('Perc_', '').replace('Synth_', '').replace('.wav', '').replace(/_/g, ' ');
+                    // Default to something like Stick hi
+                    if (file === 'Synth_Block_A_lo.wav') {
+                        option.selected = true;
+                    }
+                    soundSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Failed to load metronomes', err);
+            }
+        }
+
+        loadVoices();
+        loadMetronomes();
+
+        voicePreviewBtn.addEventListener('click', () => {
+            playPreview(`/static/samples/${voiceSelect.value}.mp3`);
+        });
+
+        soundPreviewBtn.addEventListener('click', () => {
+            // Note: We need an endpoint or static access to assets for preview
+            playPreview(`/assets/metronomes/${soundSelect.value}`);
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            messageDiv.textContent = 'Generating track... please wait.';
+            messageDiv.className = '';
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${data.songName.replace(/\s+/g, '_')}_cue.mp3`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    messageDiv.textContent = 'Success! Your download should start shortly.';
+                    messageDiv.className = 'success';
+                } else {
+                    const errorData = await response.json();
+                    messageDiv.textContent = `Error: ${errorData.detail || 'Failed to generate track'}`;
+                    messageDiv.className = 'error';
+                }
+            } catch (err) {
+                messageDiv.textContent = 'An error occurred. Please try again.';
+                messageDiv.className = 'error';
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: cue-track-generator
+    env: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: j9jfwdrw7BRfcR43Qohk
+      - key: PYTHONPATH
+        value: .

@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cue Track Generator - Advanced</title>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/timeline.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #bb86fc;
+            --secondary-color: #03dac6;
+            --text-color: #e0e0e0;
+            --border-color: #333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            background-color: var(--surface-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+            z-index: 1001; /* Above overlay */
+        }
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow-y: auto;
+        }
+        .timeline-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #000;
+            overflow-y: auto;
+            position: relative;
+        }
+        #master-playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 2px;
+            background-color: #fff;
+            z-index: 100;
+            pointer-events: none;
+            display: none;
+        }
+        #context-menu {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: none;
+            border-radius: 4px;
+            padding: 5px 0;
+            min-width: 150px;
+        }
+        #cue-context-menu {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 2000;
+            display: none;
+            border-radius: 4px;
+            padding: 5px 0;
+            min-width: 150px;
+        }
+        .menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #eee;
+        }
+        .menu-item:hover {
+            background-color: #bb86fc;
+            color: #000;
+        }
+        .track-row {
+            height: 160px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            position: relative;
+        }
+        .track-row.click-track {
+            background-color: rgba(187, 134, 252, 0.1);
+            border-bottom: 3px solid var(--primary-color);
+        }
+        .track-controls {
+            width: 180px;
+            min-width: 180px;
+            max-width: 180px;
+            background-color: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            font-size: 0.8rem;
+            z-index: 10;
+            box-sizing: border-box;
+        }
+        .mute-btn.active {
+            background-color: #cf6679;
+            color: #fff;
+        }
+        .track-waveform {
+            flex: 1;
+            position: relative;
+        }
+        .btn {
+            background-color: var(--secondary-color);
+            color: #000;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-primary { background-color: var(--primary-color); }
+        .btn:hover { opacity: 0.9; }
+        .btn:disabled { background-color: #555; cursor: not-allowed; }
+
+        .sidebar-track-item {
+            padding: 8px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+            border-left: 3px solid #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sidebar-track-item.click { border-left-color: var(--primary-color); }
+
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.3rem; font-size: 0.9rem; color: #aaa; }
+        input, select {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 0.4rem;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        #cue-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--surface-color);
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+            width: 300px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+            display: none;
+        }
+        .overlay.active {
+            display: block;
+            pointer-events: auto;
+        }
+
+        #transport-bar {
+            background-color: var(--surface-color);
+            padding: 0.5rem 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .track-name {
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 100%;
+        }
+        .control-row { display: flex; gap: 5px; align-items: center; }
+        input[type="range"] { flex: 1; }
+
+        #drop-zone {
+            border: 2px dashed var(--border-color);
+            padding: 2rem;
+            text-align: center;
+            margin-top: 1rem;
+            color: #888;
+        }
+        #drop-zone.hover { border-color: var(--secondary-color); color: #fff; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Advanced Cue Track Gen</h1>
+        <div style="display: flex; gap: 10px;">
+             <a href="/" style="color: var(--primary-color); text-decoration: none; align-self: center; margin-right: 20px;">Simple Mode</a>
+             <button class="btn btn-primary" id="exportBtn">Export Mix</button>
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <div class="sidebar">
+            <div class="form-group">
+                <label>BPM</label>
+                <input type="number" id="bpmInput" value="120">
+            </div>
+            <div class="form-group">
+                <label>Mode</label>
+                <select id="modeSelect">
+                    <option value="1">Mode 1: Generate Standard Click</option>
+                    <option value="2">Mode 2: Import Backing Tracks</option>
+                </select>
+            </div>
+            <div id="mode1-controls">
+                <div class="form-group">
+                    <label>Duration (Seconds)</label>
+                    <input type="number" id="durationInput" value="30">
+                </div>
+                <button class="btn" id="generateBaseBtn">Generate Base Track</button>
+            </div>
+            <div id="mode2-controls" style="display: none;">
+                <div class="form-group">
+                    <label>Reference Click Track</label>
+                    <button class="btn" id="uploadClickBtn" style="width: 100%;">Upload Click</button>
+                    <input type="file" id="clickFileInput" style="display: none;" accept="audio/*">
+                </div>
+                <hr style="width: 100%; border-color: var(--border-color);">
+                <label>Instrumental Backing Tracks</label>
+                <div id="drop-zone">
+                    Drop instrumentals here<br>
+                    (Up to 10 tracks)
+                    <input type="file" id="fileInput" multiple style="display: none;" accept="audio/*">
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label>Metronome Sound</label>
+                    <select id="soundSelect"></select>
+                </div>
+                <button class="btn" id="replaceClickBtn" style="width: 100%; margin-top: 0.5rem;">Replace Clicks in Track</button>
+            </div>
+
+            <hr style="width: 100%; border-color: var(--border-color);">
+
+            <div class="form-group">
+                <label>Voice for Cues</label>
+                <select id="voiceSelect"></select>
+            </div>
+
+            <div id="track-list-sidebar" style="margin-top: 1rem;">
+                <label>Active Tracks</label>
+                <div id="sidebarTrackList"></div>
+            </div>
+
+            <div id="debug-panel" style="margin-top: 2rem; border-top: 1px solid #444; padding-top: 1rem;">
+                <button class="btn" id="runDiagnosticsBtn" style="width: 100%; font-size: 0.7rem; background: #333; color: #aaa;">Run Path Diagnostics</button>
+                <div id="debugOutput" style="font-family: monospace; font-size: 0.65rem; margin-top: 0.5rem; color: #888; word-break: break-all; white-space: pre-wrap; display: none; background: #000; padding: 5px;"></div>
+            </div>
+        </div>
+
+        <div class="timeline-container" id="timeline">
+            <div id="master-playhead"></div>
+            <!-- Waveforms will be appended here -->
+            <div id="timeline-ruler"></div>
+        </div>
+    </div>
+
+    <div id="transport-bar">
+        <button class="btn" id="playBtn">Play/Pause</button>
+        <button class="btn" id="stopBtn">Stop</button>
+        <span id="currentTime">00:00.0</span>
+    </div>
+
+    <div id="context-menu">
+        <div class="menu-item" id="menuAddCue">Add Cue here...</div>
+        <div class="menu-item" id="menuDeleteTrack">Delete Track</div>
+    </div>
+
+    <div id="cue-context-menu">
+        <div class="menu-item" id="menuDeleteCue">Delete Cue</div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div id="cue-modal">
+        <h3>Add Cue</h3>
+        <div class="form-group">
+            <label>Cue Text</label>
+            <input type="text" id="cueTextInput" placeholder="e.g. Chorus">
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn" id="cancelCueBtn" style="background: #555;">Cancel</button>
+            <button class="btn btn-primary" id="saveCueBtn">Save Cue</button>
+        </div>
+    </div>
+
+    <script>
+        const modeSelect = document.getElementById('modeSelect');
+        const mode1Controls = document.getElementById('mode1-controls');
+        const mode2Controls = document.getElementById('mode2-controls');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const timeline = document.getElementById('timeline');
+        const playBtn = document.getElementById('playBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const cueModal = document.getElementById('cue-modal');
+        const overlay = document.getElementById('overlay');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('fileInput');
+        const clickFileInput = document.getElementById('clickFileInput');
+        const uploadClickBtn = document.getElementById('uploadClickBtn');
+        const soundSelect = document.getElementById('soundSelect');
+        const replaceClickBtn = document.getElementById('replaceClickBtn');
+        const contextMenu = document.getElementById('context-menu');
+        const cueContextMenu = document.getElementById('cue-context-menu');
+
+        let tracks = []; // Array of { wavesurfer, container, info }
+        let cues = []; // Array of { text, voice_id, endTime, url, durationMs }
+        let selectedTime = 0;
+        let isSeeking = false;
+        let contextTrack = null;
+        let contextRegion = null;
+
+        // Initialize
+        async function init() {
+            await loadVoices();
+            await loadMetronomes();
+            setupModeToggle();
+            setupDragAndDrop();
+            setupClickReplacement();
+            setupDiagnostics();
+        }
+
+        async function loadVoices() {
+            const resp = await fetch('static/voices.json');
+            const voices = await resp.json();
+            voices.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id;
+                opt.textContent = v.name;
+                if (v.id === 'en-US-BrianNeural') opt.selected = true;
+                voiceSelect.appendChild(opt);
+            });
+        }
+
+        async function loadMetronomes() {
+            const resp = await fetch('static/metronomes.json');
+            const metronomes = await resp.json();
+            metronomes.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m.replace('Perc_', '').replace('Synth_', '').replace('.wav', '').replace(/_/g, ' ');
+                if (m === 'Perc_Stick_hi.wav') opt.selected = true;
+                soundSelect.appendChild(opt);
+            });
+        }
+
+        function setupModeToggle() {
+            modeSelect.addEventListener('change', () => {
+                if (modeSelect.value === '1') {
+                    mode1Controls.style.display = 'block';
+                    mode2Controls.style.display = 'none';
+                } else {
+                    mode1Controls.style.display = 'none';
+                    mode2Controls.style.display = 'block';
+                }
+            });
+        }
+
+        function createTrackRow(name, isMain = false) {
+            const row = document.createElement('div');
+            row.className = 'track-row' + (isMain ? ' click-track' : '');
+
+            const controls = document.createElement('div');
+            controls.className = 'track-controls';
+            const displayName = isMain ? 'Metronome' : parseTrackName(name);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'track-name';
+            nameDiv.style.marginBottom = '10px';
+            nameDiv.style.color = 'var(--primary-color)';
+            nameDiv.textContent = displayName;
+
+            controls.appendChild(nameDiv);
+
+            const controlsHtml = `
+                <div class="control-row">
+                    <label>Vol: <span class="vol-val">0.80</span></label>
+                    <input type="range" class="vol-slider" min="0" max="1" step="0.01" value="0.8">
+                </div>
+                <div class="control-row">
+                    <label>Pan: <span class="pan-val">C</span></label>
+                    <input type="range" class="pan-slider" min="-1" max="1" step="0.1" value="0">
+                </div>
+                <div class="control-row" style="margin-top: 5px;">
+                    <button class="mute-btn btn" style="flex:1; font-size: 0.7rem;">Mute</button>
+                </div>
+            `;
+            controls.insertAdjacentHTML('beforeend', controlsHtml);
+
+            const waveform = document.createElement('div');
+            waveform.className = 'track-waveform';
+
+            row.appendChild(controls);
+            row.appendChild(waveform);
+            timeline.appendChild(row);
+
+            const trackObj = { container: row, name: name, isClick: isMain };
+            tracks.push(trackObj);
+
+            const regionsPlugin = WaveSurfer.Regions.create();
+            const ws = WaveSurfer.create({
+                container: waveform,
+                waveColor: isMain ? '#bb86fc' : '#444',
+                progressColor: isMain ? '#03dac6' : '#666',
+                cursorColor: 'transparent', // Use master playhead instead
+                height: 160,
+                interact: true,
+                minPxPerSec: 50,
+                fillParent: false,
+                plugins: [
+                    regionsPlugin,
+                    WaveSurfer.Timeline.create()
+                ]
+            });
+
+            trackObj.wavesurfer = ws;
+            trackObj.regions = regionsPlugin;
+            updateTrackListSidebar();
+
+            // Unified Cue Playback Synchronization
+            if (isMain) {
+                ws.on('timeupdate', (currentTime) => {
+                    const allRegions = regionsPlugin.getRegions();
+                    allRegions.forEach(reg => {
+                        const audio = reg.previewAudio;
+                        if (!audio) return;
+
+                        const isWithin = currentTime >= reg.start && currentTime <= reg.end;
+                        if (isWithin && ws.isPlaying()) {
+                            if (audio.paused) {
+                                audio.currentTime = currentTime - reg.start;
+                                audio.play().catch(() => {});
+                            }
+                        } else {
+                            if (!audio.paused) {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            }
+                        }
+                    });
+                });
+
+                ws.on('pause', () => {
+                    regionsPlugin.getRegions().forEach(reg => {
+                        if (reg.previewAudio) reg.previewAudio.pause();
+                    });
+                });
+
+                ws.on('stop', () => {
+                    regionsPlugin.getRegions().forEach(reg => {
+                        if (reg.previewAudio) {
+                            reg.previewAudio.pause();
+                            reg.previewAudio.currentTime = 0;
+                        }
+                    });
+                });
+            }
+
+            // Synchronization Logic
+            ws.on('interaction', (newTime) => {
+                if (isSeeking) return;
+                isSeeking = true;
+                tracks.forEach(t => {
+                    if (t.wavesurfer && t.wavesurfer !== ws) {
+                        t.wavesurfer.setTime(newTime);
+                    }
+                });
+                updateMasterPlayhead(newTime);
+                isSeeking = false;
+
+                // Also update selectedTime for cue placement
+                selectedTime = newTime;
+            });
+
+            // Scroll Synchronization
+            ws.on('scroll', (px) => {
+                tracks.forEach(t => {
+                    if (t.wavesurfer && t.wavesurfer !== ws) {
+                        const wrapper = t.wavesurfer.getWrapper();
+                        if (wrapper.scrollLeft !== px) {
+                            wrapper.scrollLeft = px;
+                        }
+                    }
+                });
+            });
+
+            ws.on('timeupdate', (currentTime) => {
+                if (isMain || (tracks.length > 0 && tracks[0] === trackObj)) {
+                    updateMasterPlayhead(currentTime);
+                    document.getElementById('currentTime').textContent = formatTime(currentTime);
+                }
+            });
+
+            ws.on('ready', () => {
+                document.getElementById('master-playhead').style.display = 'block';
+            });
+
+            // Wire up controls
+            const volSlider = controls.querySelector('.vol-slider');
+            const volVal = controls.querySelector('.vol-val');
+            volSlider.addEventListener('input', () => {
+                ws.setVolume(volSlider.value);
+                volVal.textContent = parseFloat(volSlider.value).toFixed(2);
+                updateTrackListSidebar();
+            });
+
+            const panSlider = controls.querySelector('.pan-slider');
+            const panVal = controls.querySelector('.pan-val');
+            panSlider.addEventListener('input', () => {
+                const val = parseFloat(panSlider.value);
+                panVal.textContent = val === 0 ? 'C' : (val < 0 ? 'L' + Math.abs(val).toFixed(1) : 'R' + val.toFixed(1));
+                updateTrackListSidebar();
+            });
+
+            const muteBtn = controls.querySelector('.mute-btn');
+            muteBtn.addEventListener('click', () => {
+                muteBtn.classList.toggle('active');
+                const isMuted = muteBtn.classList.contains('active');
+                ws.setMuted(isMuted);
+            });
+
+            // Handle context menu
+            waveform.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showContextMenu(e.clientX, e.clientY, trackObj, ws);
+            });
+
+            return trackObj;
+        }
+
+        function showCueModal() {
+            overlay.style.display = 'block';
+            cueModal.style.display = 'block';
+            document.getElementById('cueTextInput').focus();
+        }
+
+        function hideCueModal() {
+            overlay.style.display = 'none';
+            cueModal.style.display = 'none';
+            document.getElementById('cueTextInput').value = '';
+        }
+
+        document.getElementById('cancelCueBtn').addEventListener('click', hideCueModal);
+        document.getElementById('saveCueBtn').addEventListener('click', async () => {
+            const saveBtn = document.getElementById('saveCueBtn');
+            const text = document.getElementById('cueTextInput').value;
+            if (!text) return;
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Generating...';
+
+            try {
+                const voiceId = voiceSelect.value;
+                const resp = await fetch('/advanced/api/generate-cue', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ text, voice_id: voiceId })
+                });
+
+                if (!resp.ok) throw new Error("Failed to generate cue");
+
+                const data = await resp.json();
+
+                cues.push({
+                text: text,
+                voice_id: voiceId,
+                endTime: selectedTime,
+                url: data.url,
+                durationMs: data.duration_ms
+            });
+
+                // Add cue to timeline
+                addCueToTimeline(data.url, data.duration_ms, selectedTime, text);
+                hideCueModal();
+            } catch (err) {
+                console.error(err);
+                alert("Error saving cue: " + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Cue';
+            }
+        });
+
+        function parseTrackName(filename) {
+            // Match content inside parentheses, specifically looking for the instrument part
+            // Example: Foo(Arr_Electric_Guitar_Custom_Backing_Track) -> Electric Guitar
+            const matches = filename.match(/\(([^)]+)\)/g);
+            if (matches) {
+                let name = matches[matches.length - 1]; // Get last set of parens
+                name = name.replace(/[()]/g, ''); // Remove parens
+                name = name.replace(/_Custom_Backing_Track/g, '');
+                name = name.replace(/_/g, ' ');
+                return name;
+            }
+            return filename.replace(/_/g, ' ');
+        }
+
+        function updateTrackListSidebar() {
+            const list = document.getElementById('sidebarTrackList');
+            if (!list) return;
+            list.innerHTML = '';
+            tracks.forEach(t => {
+                const div = document.createElement('div');
+                div.className = 'sidebar-track-item' + (t.isClick ? ' click' : '');
+
+                const name = t.isClick ? 'Metronome' : parseTrackName(t.name);
+                const vol = t.container.querySelector('.vol-slider').value;
+                const panRaw = parseFloat(t.container.querySelector('.pan-slider').value);
+                const pan = panRaw === 0 ? 'C' : (panRaw < 0 ? 'L' + Math.abs(panRaw).toFixed(1) : 'R' + panRaw.toFixed(1));
+
+                const nameDiv = document.createElement('div');
+                nameDiv.style.fontWeight = 'bold';
+                nameDiv.textContent = name;
+
+                const metaDiv = document.createElement('div');
+                metaDiv.style.fontSize = '0.7rem';
+                metaDiv.style.color = '#aaa';
+                metaDiv.textContent = `Vol: ${parseFloat(vol).toFixed(2)} | Pan: ${pan}`;
+
+                div.appendChild(nameDiv);
+                div.appendChild(metaDiv);
+                list.appendChild(div);
+            });
+        }
+
+        function updateMasterPlayhead(time) {
+            if (tracks.length === 0) return;
+            const ws = tracks[0].wavesurfer;
+            const duration = ws.getDuration();
+            if (!duration) return;
+
+            const ratio = time / duration;
+            const playhead = document.getElementById('master-playhead');
+
+            // Calculate position relative to waveform container
+            const containerWidth = ws.getWrapper().clientWidth;
+            playhead.style.left = `calc(180px + ${ratio * containerWidth}px)`;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(1);
+            return `${mins.toString().padStart(2, '0')}:${secs.padStart(4, '0')}`;
+        }
+
+        function showContextMenu(x, y, trackObj, ws) {
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${x}px`;
+            contextMenu.style.top = `${y}px`;
+            contextTrack = trackObj;
+
+            // Only allow "Add Cue" on click track
+            const addCueItem = document.getElementById('menuAddCue');
+            if (trackObj.isClick || tracks.indexOf(trackObj) === 0) {
+                 addCueItem.style.display = 'block';
+            } else {
+                 addCueItem.style.display = 'none';
+            }
+
+            // Calculate time at click for "Add Cue"
+            const bbox = ws.getWrapper().getBoundingClientRect();
+            const relativeX = x - bbox.left;
+            selectedTime = (relativeX / bbox.width) * ws.getDuration();
+        }
+
+        function showCueContextMenu(x, y, region) {
+            cueContextMenu.style.display = 'block';
+            cueContextMenu.style.left = `${x}px`;
+            cueContextMenu.style.top = `${y}px`;
+            contextRegion = region;
+        }
+
+        // Hide context menu on click elsewhere
+        document.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+            cueContextMenu.style.display = 'none';
+        });
+
+        document.getElementById('menuAddCue').addEventListener('click', () => {
+            showCueModal();
+        });
+
+        document.getElementById('menuDeleteTrack').addEventListener('click', () => {
+            if (contextTrack && confirm(`Delete track "${contextTrack.name}"?`)) {
+                contextTrack.wavesurfer.destroy();
+                contextTrack.container.remove();
+                tracks = tracks.filter(t => t !== contextTrack);
+                updateTrackListSidebar();
+            }
+        });
+
+        document.getElementById('menuDeleteCue').addEventListener('click', () => {
+            if (contextRegion) {
+                // Find and remove from cues array
+                cues = cues.filter(c => c.regionId !== contextRegion.id);
+                // Remove from WaveSurfer
+                contextRegion.remove();
+            }
+        });
+
+        function addCueToTimeline(url, durationMs, endTime, text) {
+            const startTime = Math.max(0, endTime - (durationMs / 1000));
+
+            if (tracks.length === 0) {
+                alert("Please add at least one track (e.g., generate a click track) before adding cues.");
+                return;
+            }
+
+            const mainTrackObj = tracks[0];
+            const wsRegions = mainTrackObj.regions;
+
+            if (!wsRegions) {
+                alert("Critical error: Regions plugin not loaded on the main track.");
+                return;
+            }
+
+            const region = wsRegions.addRegion({
+                start: startTime,
+                end: endTime,
+                content: text,
+                color: 'rgba(187, 134, 252, 0.3)',
+                drag: true,
+                resize: false,
+            });
+
+            // Attach preview audio to region for unified sync
+            region.previewAudio = new Audio(url);
+
+            // Right-click on region for deletion
+            region.on('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showCueContextMenu(e.clientX, e.clientY, region);
+            });
+
+            // Store ID on cue for matching
+            const cueIdx = cues.length - 1;
+            cues[cueIdx].regionId = region.id;
+
+            // Update cue data when dragged
+            wsRegions.on('region-updated', (reg) => {
+                const cue = cues.find(c => c.regionId === reg.id);
+                if (cue) {
+                    cue.endTime = reg.end;
+                }
+            });
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (tracks.length === 0) return;
+            const isPlaying = tracks[0].wavesurfer.isPlaying();
+            tracks.forEach(t => isPlaying ? t.wavesurfer.pause() : t.wavesurfer.play());
+        });
+
+        stopBtn.addEventListener('click', () => {
+            tracks.forEach(t => {
+                t.wavesurfer.stop();
+            });
+            updateMasterPlayhead(0);
+        });
+
+        // Mode 1 Logic
+        document.getElementById('generateBaseBtn').addEventListener('click', async () => {
+            // Clear existing tracks
+            tracks.forEach(t => t.container.remove());
+            tracks = [];
+
+            const bpm = document.getElementById('bpmInput').value;
+            const duration = document.getElementById('durationInput').value;
+
+            // Call the simple generate endpoint (reusing existing logic)
+            // But we need a way to get the file back for the timeline
+            const resp = await fetch('/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    songName: "Base Click",
+                    bpm: parseInt(bpm),
+                    minutes: Math.floor(duration / 60),
+                    seconds: duration % 60,
+                    voice: voiceSelect.value,
+                    sound: "Perc_Stick_hi.wav",
+                    panning: 0
+                })
+            });
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+
+            const track = createTrackRow("Metronome", true);
+            track.wavesurfer.load(url);
+            track.url = url; // Save URL for export conversion
+        });
+
+        // Drag and Drop Logic
+        function setupDiagnostics() {
+            const btn = document.getElementById('runDiagnosticsBtn');
+            const output = document.getElementById('debugOutput');
+
+            btn.addEventListener('click', async () => {
+                btn.textContent = 'Running...';
+                try {
+                    const resp = await fetch('/advanced/api/debug-paths');
+                    const data = await resp.json();
+                    output.textContent = JSON.stringify(data, null, 2);
+                    output.style.display = 'block';
+                } catch (e) {
+                    output.textContent = 'Diagnostic fetch failed: ' + e.message;
+                    output.style.display = 'block';
+                } finally {
+                    btn.textContent = 'Run Path Diagnostics';
+                }
+            });
+        }
+
+        function setupClickReplacement() {
+            replaceClickBtn.addEventListener('click', async () => {
+                if (tracks.length === 0) {
+                    alert("Please upload a click track first.");
+                    return;
+                }
+
+                replaceClickBtn.disabled = true;
+                replaceClickBtn.textContent = "Analyzing...";
+
+                const mainTrack = tracks[0];
+                const formData = new FormData();
+                formData.append('file', mainTrack.file);
+                formData.append('bpm', document.getElementById('bpmInput').value);
+                formData.append('sound_type', soundSelect.value);
+
+                try {
+                    const resp = await fetch('/advanced/api/analyze-click', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const text = await resp.text();
+                    let data = null;
+                    try {
+                        data = JSON.parse(text);
+                    } catch (e) {
+                        // Not JSON
+                    }
+
+                    if (!resp.ok) {
+                        throw new Error(data?.detail || text || "Analysis failed");
+                    }
+
+                    mainTrack.replaceClicks = data.clicks;
+                    mainTrack.selectedSound = soundSelect.value;
+
+                    // Update the visual waveform and audio preview
+                    if (data.preview_url) {
+                        mainTrack.wavesurfer.load(data.preview_url);
+                    }
+
+                    alert(`Found ${data.clicks.length} clicks. The waveform has been updated with the preview of your chosen sound: ${soundSelect.value}`);
+
+                } catch (e) {
+                    console.error(e);
+                    alert("Click analysis failed: " + e.message);
+                } finally {
+                    replaceClickBtn.disabled = false;
+                    replaceClickBtn.textContent = "Replace Clicks in Track";
+                }
+            });
+        }
+
+        function setupDragAndDrop() {
+            uploadClickBtn.addEventListener('click', () => clickFileInput.click());
+            clickFileInput.addEventListener('change', () => {
+                if (clickFileInput.files.length > 0) {
+                    handleClickFile(clickFileInput.files[0]);
+                }
+            });
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('hover');
+            });
+
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('hover');
+                handleFiles(e.dataTransfer.files);
+            });
+        }
+
+        function handleClickFile(file) {
+            // Click track should always be at the top.
+            // If one exists, maybe we replace it or alert.
+            const existingClick = tracks.find(t => t.isClick);
+            if (existingClick) {
+                if (!confirm("Replace existing click track?")) return;
+                existingClick.wavesurfer.destroy();
+                existingClick.container.remove();
+                tracks = tracks.filter(t => t !== existingClick);
+            }
+
+            const url = URL.createObjectURL(file);
+            const track = createTrackRow(file.name, true);
+            track.wavesurfer.load(url);
+            track.file = file;
+            track.isClick = true;
+
+            // Move to top of array
+            tracks.splice(tracks.indexOf(track), 1);
+            tracks.unshift(track);
+            // DOM move
+            timeline.prepend(track.container);
+        }
+
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                const url = URL.createObjectURL(file);
+                const track = createTrackRow(file.name, false);
+                track.wavesurfer.load(url);
+                track.file = file;
+            });
+        }
+
+        exportBtn.addEventListener('click', async () => {
+            exportBtn.disabled = true;
+            exportBtn.textContent = "Exporting...";
+
+            const formData = new FormData();
+            const tracksData = [];
+
+            for (const t of tracks) {
+                if (t.file) {
+                    formData.append('files', t.file);
+                    tracksData.push({
+                        filename: t.file.name,
+                        pan: parseFloat(t.container.querySelector('.pan-slider').value),
+                        volume: parseFloat(t.container.querySelector('.vol-slider').value),
+                        mute: t.container.querySelector('.mute-btn').classList.contains('active'),
+                        replaceClicks: t.replaceClicks || null,
+                        selectedSound: t.selectedSound || null
+                    });
+                } else if (t.url && t.isClick) {
+                    // Handle Mode 1 generated tracks that have a blob URL but no File object
+                    // We need to fetch the blob and convert to a file
+                    try {
+                        const blobResp = await fetch(t.url);
+                        const blob = await blobResp.blob();
+                        const file = new File([blob], "generated_click.mp3", { type: "audio/mpeg" });
+                        formData.append('files', file);
+                        tracksData.push({
+                            filename: "generated_click.mp3",
+                            pan: parseFloat(t.container.querySelector('.pan-slider').value),
+                            volume: parseFloat(t.container.querySelector('.vol-slider').value),
+                            mute: t.container.querySelector('.mute-btn').classList.contains('active'),
+                            replaceClicks: null,
+                            selectedSound: null
+                        });
+                    } catch (e) {
+                        console.error("Failed to include generated track in export", e);
+                    }
+                }
+            }
+
+            formData.append('tracks_json', JSON.stringify(tracksData));
+            formData.append('cues_json', JSON.stringify(cues));
+
+            try {
+                const resp = await fetch('/advanced/api/export-mix', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    let data = null;
+                    try { data = JSON.parse(text); } catch(e) {}
+                    throw new Error(data?.detail || text || "Export failed");
+                }
+
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "final_mix.mp3";
+                a.click();
+            } catch (e) {
+                console.error(e);
+                alert("Export error: " + e.message);
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.textContent = "Export Mix";
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
