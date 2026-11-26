@@ -94,7 +94,7 @@ export function parseSectionHeader(line) {
   const colonMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9\s-]{1,30}):$/);
   if (colonMatch) {
     const inner = colonMatch[1].trim();
-    if (!/^(title|song|artist|by|key|tempo|bpm|time|time signature|capo|duration|tuning)$/i.test(inner)) {
+    if (!/^(title|song|artist|by|key|tempo|bpm|time|time signature|capo|default capo|duration|tuning|tuning note|lead vox|backup vox|pre-roll|auto-scroll pre-roll|auto-scroll duration)$/i.test(inner)) {
       return { label: inner, type: classifySectionType(inner) };
     }
   }
@@ -367,7 +367,7 @@ export function parseChordSheet(rawText) {
         metadata.time = val;
         continue;
       }
-      if (key === 'capo') {
+      if (key === 'capo' || key === 'default_capo' || key === 'default capo') {
         metadata.capo = val;
         continue;
       }
@@ -375,7 +375,7 @@ export function parseChordSheet(rawText) {
         metadata.duration = val;
         continue;
       }
-      if (key === 'tuning') {
+      if (key === 'tuning' || key === 'tuning_note' || key === 'tuning note') {
         metadata.tuning = val;
         continue;
       }
@@ -387,17 +387,17 @@ export function parseChordSheet(rawText) {
         metadata.backupVox = val;
         continue;
       }
-      if (key === 'pre_roll' || key === 'pre-roll' || key === 'auto_scroll_pre_roll') {
-        metadata.preRoll = val;
+      if (key === 'pre_roll' || key === 'pre-roll' || key === 'auto_scroll_pre_roll' || key === 'auto-scroll pre-roll') {
+        metadata.preRoll = val.replace(/\s*s(?:ec(?:onds?)?)?$/i, '');
         continue;
       }
-      if (key === 'auto_scroll_duration') {
+      if (key === 'auto_scroll_duration' || key === 'auto-scroll duration') {
         metadata.autoScrollDuration = val;
         continue;
       }
       if (key === 'comment' || key === 'c' || key === 'comment_italic' || key === 'ci') {
-        if (!seenMusicContent && /^capo\b/i.test(val) && !metadata.capo) {
-          metadata.capo = val.replace(/^capo\s*:?\s*/i, '');
+        if (!seenMusicContent && /^(?:default\s*)?capo\b/i.test(val) && !metadata.capo) {
+          metadata.capo = val.replace(/^(?:default\s*)?capo\s*:?\s*/i, '');
         } else if (!seenMusicContent && /^lead\s*vox\s*:/i.test(val) && !metadata.leadVox) {
           metadata.leadVox = val.replace(/^lead\s*vox\s*:\s*/i, '');
         } else if (!seenMusicContent && /^backup\s*vox\s*:/i.test(val) && !metadata.backupVox) {
@@ -458,7 +458,7 @@ export function parseChordSheet(rawText) {
 
     // 2. Plain-text metadata headers near the top (before music starts)
     if (!seenMusicContent) {
-      const metaMatch = trimmed.match(/^(Title|Song|Artist|By|Key|Tempo|BPM|Time|Time Signature|Capo|Lead Vox|Backup Vox|Tuning|Tuning Note|Duration|Auto-Scroll Pre-Roll|Pre-Roll|Auto-Scroll Duration)\s*:\s*(.+)$/i);
+      const metaMatch = trimmed.match(/^(Title|Song|Artist|By|Key|Tempo|BPM|Time|Time Signature|Capo|Default Capo|Lead Vox|Backup Vox|Tuning|Tuning Note|Duration|Auto-Scroll Pre-Roll|Pre-Roll|Auto-Scroll Duration)\s*:\s*(.+)$/i);
       if (metaMatch) {
         const field = metaMatch[1].toLowerCase();
         const val = metaMatch[2].trim();
@@ -467,7 +467,7 @@ export function parseChordSheet(rawText) {
         else if (field === 'key') metadata.key = val;
         else if (field === 'tempo' || field === 'bpm') metadata.tempo = val.replace(/\s*bpm$/i, '');
         else if (field === 'time' || field === 'time signature') metadata.time = val;
-        else if (field === 'capo') metadata.capo = val;
+        else if (field === 'capo' || field === 'default capo') metadata.capo = val;
         else if (field === 'lead vox') metadata.leadVox = val;
         else if (field === 'backup vox') metadata.backupVox = val;
         else if (field === 'tuning' || field === 'tuning note') metadata.tuning = val;
@@ -731,16 +731,17 @@ export function formatDocument(doc, options = {}) {
     if (meta.tempo) outLines.push(`{tempo: ${meta.tempo}}`);
     if (meta.time) outLines.push(`{time: ${meta.time}}`);
     if (normalizedDuration) outLines.push(`{duration: ${normalizedDuration}}`);
-    if (meta.leadVox) outLines.push(useCommentDirectives ? `{comment: Lead Vox: ${meta.leadVox}}` : `Lead Vox: ${meta.leadVox}`);
-    if (meta.backupVox) outLines.push(useCommentDirectives ? `{comment: Backup Vox: ${meta.backupVox}}` : `Backup Vox: ${meta.backupVox}`);
-    if (meta.tuning) outLines.push(useCommentDirectives ? `{comment: Tuning: ${meta.tuning}}` : `Tuning: ${meta.tuning}`);
-    if (meta.capo) outLines.push(useCommentDirectives ? `{comment: Capo: ${meta.capo}}` : `Capo: ${meta.capo}`);
+    if (meta.capo) outLines.push(`{capo: ${meta.capo}}`);
+    if (meta.leadVox) outLines.push(`{Lead Vox: ${meta.leadVox}}`);
+    if (meta.backupVox) outLines.push(`{Backup Vox: ${meta.backupVox}}`);
+    if (meta.tuning) outLines.push(`{Tuning Note: ${meta.tuning}}`);
+    if (meta.capo) outLines.push(`{Default Capo: ${meta.capo}}`);
     if (meta.preRoll) {
-      const preText = /^\d+$/.test(String(meta.preRoll).trim()) ? `${meta.preRoll.trim()}s` : String(meta.preRoll).trim();
-      outLines.push(useCommentDirectives ? `{comment: Auto-Scroll Pre-Roll: ${preText}}` : `Auto-Scroll Pre-Roll: ${preText}`);
+      const preText = String(meta.preRoll).trim().replace(/\s*s(?:ec(?:onds?)?)?$/i, '');
+      outLines.push(`{Auto-Scroll Pre-Roll: ${preText}}`);
     }
     if (computedAutoScrollDuration) {
-      outLines.push(useCommentDirectives ? `{comment: Auto-Scroll Duration: ${computedAutoScrollDuration}}` : `Auto-Scroll Duration: ${computedAutoScrollDuration}`);
+      outLines.push(`{Auto-Scroll Duration: ${computedAutoScrollDuration}}`);
     }
     const metaLineCount = outLines.length;
     if (metaLineCount > 0) outLines.push('');
@@ -1097,5 +1098,3 @@ export function inferMissingMetadata(doc, rawText = '') {
 
   return { key, tempo, capo, tuning, time };
 }
-
-

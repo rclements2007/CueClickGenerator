@@ -387,7 +387,7 @@
             <input type="text" id="metaTime" placeholder="e.g. 4/4">
         </div>
         <div class="field">
-            <label for="metaCapo">Capo</label>
+            <label for="metaCapo">Default Capo</label>
             <input type="text" id="metaCapo" placeholder="e.g. 2">
         </div>
         <div class="field">
@@ -611,8 +611,8 @@ That saved a wretch like me"></textarea>
                 if (time) parts.push(`Time: ${time}`);
                 if (duration) parts.push(`Duration: ${duration}`);
                 if (autoScrollDuration) parts.push(`Auto-Scroll: ${autoScrollDuration} (${preRoll || '0'}s pre-roll)`);
-                if (capo) parts.push(`Capo: ${capo}`);
-                if (tuning) parts.push(`Tuning: ${tuning}`);
+                if (capo) parts.push(`Default Capo: ${capo}`);
+                if (tuning) parts.push(`Tuning Note: ${tuning}`);
                 if (leadVox) parts.push(`Lead Vox: ${leadVox}`);
                 if (backupVox) parts.push(`Backup Vox: ${backupVox}`);
                 if (parts.length > 0) {
@@ -1193,11 +1193,11 @@ Hey, mama rock me`;
             }
             if (!metaCapo.value.trim() && guessed.capo) {
                 metaCapo.value = guessed.capo;
-                filled.push(`Capo (${guessed.capo})`);
+                filled.push(`Default Capo (${guessed.capo})`);
             }
             if (!metaTuning.value.trim() && guessed.tuning) {
                 metaTuning.value = guessed.tuning;
-                filled.push(`Tuning (${guessed.tuning})`);
+                filled.push(`Tuning Note (${guessed.tuning})`);
             }
             return filled;
         }

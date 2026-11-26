@@ -25,15 +25,10 @@ export const CHORDS_DIR = path.join(APP_DIR, 'chords');
 export const CHORDS_STATIC_DIR = path.join(CHORDS_DIR, 'static');
 
 export function ensureDirs(): void {
+  fs.mkdirSync(METRONOMES_DIR, { recursive: true });
   fs.mkdirSync(TEMP_DIR, { recursive: true });
   fs.mkdirSync(ADVANCED_TEMP_DIR, { recursive: true });
   fs.mkdirSync(SAMPLES_DIR, { recursive: true });
-
-  if (!fs.existsSync(METRONOMES_DIR)) {
-    console.warn(`CRITICAL WARNING: Metronomes directory not found at ${METRONOMES_DIR}`);
-  } else {
-    console.log(`Verified Assets Path: ${METRONOMES_DIR}`);
-  }
 }
 
 ensureDirs();

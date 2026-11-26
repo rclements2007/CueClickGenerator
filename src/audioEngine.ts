@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { promisify } from 'util';
+import ffmpegStatic from 'ffmpeg-static';
+import ffprobeStatic from 'ffprobe-static';
 import { generateSpeech, DEFAULT_ADVANCED_VOICE_ID } from './tts.js';
 import {
   ASSETS_DIR,
@@ -13,6 +15,22 @@ import {
 } from './paths.js';
 
 const execFileAsync = promisify(execFile);
+
+function resolveBinary(candidate: string | null | undefined, envOverride: string | undefined, fallback: string): string {
+  if (envOverride && fs.existsSync(envOverride)) return envOverride;
+  if (candidate && fs.existsSync(candidate)) {
+    try {
+      fs.chmodSync(candidate, 0o755);
+    } catch {
+      // ignore chmod errors on read-only filesystems
+    }
+    return candidate;
+  }
+  return fallback;
+}
+
+export const FFMPEG_BIN = resolveBinary(ffmpegStatic, process.env.FFMPEG_PATH, 'ffmpeg');
+export const FFPROBE_BIN = resolveBinary(ffprobeStatic?.path, process.env.FFPROBE_PATH, 'ffprobe');
 
 export interface AudioInfo {
   duration: number;
@@ -31,7 +49,7 @@ export type ClickItem = number | [number, boolean];
 
 export async function getAudioInfo(filepath: string): Promise<AudioInfo> {
   try {
-    const { stdout } = await execFileAsync('ffprobe', [
+    const { stdout } = await execFileAsync(FFPROBE_BIN, [
       '-v', 'error',
       '-show_entries', 'format=duration:stream=sample_rate',
       '-of', 'json',
@@ -50,7 +68,7 @@ export async function getAudioInfo(filepath: string): Promise<AudioInfo> {
 }
 
 export async function stripSilenceFfmpeg(inputPath: string, outputPath: string): Promise<void> {
-  await execFileAsync('ffmpeg', [
+  await execFileAsync(FFMPEG_BIN, [
     '-y', '-v', 'error', '-i', inputPath,
     '-af', 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse',
     outputPath,
@@ -59,7 +77,7 @@ export async function stripSilenceFfmpeg(inputPath: string, outputPath: string):
 
 async function decodeToMonoPcm(soundPath: string): Promise<Int16Array> {
   const { stdout } = await execFileAsync(
-    'ffmpeg',
+    FFMPEG_BIN,
     [
       '-v', 'error',
       '-i', soundPath,
@@ -99,7 +117,7 @@ export async function generateMetronomeFile(
   const sampleRate = 44100;
   const totalSamples = Math.floor((durationMs / 1000.0) * sampleRate);
 
-  const ffmpegProc = spawn('ffmpeg', [
+  const ffmpegProc = spawn(FFMPEG_BIN, [
     '-y', '-v', 'error',
     '-f', 's16le', '-ar', String(sampleRate), '-ac', '1',
     '-i', 'pipe:0',
@@ -171,7 +189,7 @@ export async function mixTracksFfmpeg(
 ): Promise<void> {
   const activeTracks = tracksInfo.filter((t) => !t.mute);
   if (activeTracks.length === 0) {
-    await execFileAsync('ffmpeg', [
+    await execFileAsync(FFMPEG_BIN, [
       '-y', '-v', 'error',
       '-f', 'lavfi', '-i', 'anullsrc',
       '-t', '1',
@@ -208,7 +226,7 @@ export async function mixTracksFfmpeg(
   const labels = activeTracks.map((_, i) => `[a${i}]`).join('');
   filterComplex += `${labels}amix=inputs=${activeTracks.length}:duration=longest:dropout_transition=0[out]`;
 
-  await execFileAsync('ffmpeg', [
+  await execFileAsync(FFMPEG_BIN, [
     '-y', '-v', 'error',
     ...inputs,
     '-filter_complex', filterComplex,
@@ -230,13 +248,83 @@ export interface CreateCueTrackParams {
   timeSignature?: string;
 }
 
-export function resolveMetronomePath(soundType: string): string {
-  const safeName = path.basename((soundType || '').trim());
-  const candidate = path.join(METRONOMES_DIR, safeName);
-  if (safeName && fs.existsSync(candidate)) {
-    return candidate;
+function synthesizeClickWavBuffer(soundFilename: string): Buffer {
+  const sampleRate = 44100;
+  const lower = soundFilename.toLowerCase();
+  const isHi = lower.includes('_hi');
+  const durationSec = lower.includes('bell') || lower.includes('whistle') ? 0.09 : 0.045;
+  const numSamples = Math.floor(sampleRate * durationSec);
+
+  let hash = 0;
+  for (let i = 0; i < soundFilename.length; i++) {
+    hash = (hash * 31 + soundFilename.charCodeAt(i)) >>> 0;
   }
-  return path.join(METRONOMES_DIR, 'Synth_Block_A_lo.wav');
+
+  let baseFreq = isHi ? 1320 : 880;
+  if (lower.includes('block')) baseFreq = isHi ? 1280 : 860;
+  else if (lower.includes('bell')) baseFreq = isHi ? 1760 : 1175;
+  else if (lower.includes('whistle')) baseFreq = isHi ? 2400 : 1850;
+  else if (lower.includes('tick') || lower.includes('quartz')) baseFreq = isHi ? 1600 : 1050;
+  else if (lower.includes('perc_') && !lower.includes('stick')) baseFreq = isHi ? 1150 : 720;
+  else baseFreq += (hash % 7) * 35;
+
+  const useSquare = lower.includes('square');
+  const usePercNoise = lower.includes('clap') || lower.includes('tamb') || lower.includes('perc_');
+  const decayRate = lower.includes('bell') ? 38 : 75;
+
+  const dataSize = numSamples * 2;
+  const wav = Buffer.alloc(44 + dataSize);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(36 + dataSize, 4);
+  wav.write('WAVE', 8);
+  wav.write('fmt ', 12);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); // PCM
+  wav.writeUInt16LE(1, 22); // Mono
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(dataSize, 40);
+
+  let seed = hash || 1337;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const attack = t < 0.0015 ? t / 0.0015 : 1.0;
+    const env = attack * Math.exp(-decayRate * t);
+    let sampleVal = Math.sin(2 * Math.PI * baseFreq * t);
+    if (useSquare) {
+      sampleVal = sampleVal >= 0 ? 0.75 : -0.75;
+    } else if (lower.includes('bell')) {
+      sampleVal = 0.7 * sampleVal + 0.3 * Math.sin(2 * Math.PI * baseFreq * 2.02 * t);
+    } else if (usePercNoise) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const noise = ((seed & 0xffff) / 32768.0 - 1.0) * Math.exp(-95 * t);
+      sampleVal = 0.65 * sampleVal + 0.35 * noise;
+    }
+    const clamped = Math.max(-1, Math.min(1, sampleVal * env * 0.85));
+    wav.writeInt16LE(Math.round(clamped * 32767), 44 + i * 2);
+  }
+  return wav;
+}
+
+export function ensureMetronomeSound(soundFileOrName: string): string {
+  const safeName = path.basename((soundFileOrName || '').trim()) || 'Synth_Block_A_lo.wav';
+  const finalName = safeName.endsWith('.wav') ? safeName : `${safeName}.wav`;
+  const targetPath = path.join(METRONOMES_DIR, finalName);
+  if (fs.existsSync(targetPath)) {
+    return targetPath;
+  }
+  fs.mkdirSync(METRONOMES_DIR, { recursive: true });
+  const wavBuf = synthesizeClickWavBuffer(finalName);
+  fs.writeFileSync(targetPath, wavBuf);
+  return targetPath;
+}
+
+export function resolveMetronomePath(soundType: string): string {
+  const safeName = path.basename((soundType || '').trim()) || 'Synth_Block_A_lo.wav';
+  return ensureMetronomeSound(safeName);
 }
 
 export async function createCueTrack({
@@ -260,16 +348,10 @@ export async function createCueTrack({
     if (timeSignature === '6/8') {
       const filename = path.basename(clickPath);
       if (filename.includes('_lo.wav')) {
-        const hiPath = path.join(METRONOMES_DIR, filename.replace('_lo.wav', '_hi.wav'));
-        if (fs.existsSync(hiPath)) {
-          accentClickPath = hiPath;
-        }
+        accentClickPath = ensureMetronomeSound(filename.replace('_lo.wav', '_hi.wav'));
       } else if (filename.includes('_hi.wav')) {
-        const loPath = path.join(METRONOMES_DIR, filename.replace('_hi.wav', '_lo.wav'));
-        if (fs.existsSync(loPath)) {
-          accentClickPath = clickPath;
-          clickPath = loPath;
-        }
+        accentClickPath = clickPath;
+        clickPath = ensureMetronomeSound(filename.replace('_hi.wav', '_lo.wav'));
       }
     }
 
@@ -404,7 +486,7 @@ export async function detectClicksFromFile(filepath: string, bpm: number): Promi
   let globalSampleIndex = 0;
   let threshold = 0;
 
-  const ffmpegProc = spawn('ffmpeg', [
+  const ffmpegProc = spawn(FFMPEG_BIN, [
     '-v', 'quiet',
     '-i', filepath,
     '-f', 's16le', '-acodec', 'pcm_s16le', '-ac', '1',

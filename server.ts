@@ -22,6 +22,9 @@ import {
   createCueTrack,
   createCueAudio,
   detectClicksFromFile,
+  ensureMetronomeSound,
+  FFMPEG_BIN,
+  FFPROBE_BIN,
   generateMetronomePreview,
   getAudioInfo,
   mixTracksFfmpeg,
@@ -97,6 +100,16 @@ app.get('/static/samples/:filename', async (req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ detail: `Failed to generate voice sample: ${msg}` });
   }
+});
+
+app.get('/assets/metronomes/:filename', (req: Request, res: Response) => {
+  const filename = path.basename(String(req.params.filename || ''));
+  if (!filename.endsWith('.wav') || !/^[a-zA-Z0-9_.-]+$/.test(filename)) {
+    res.status(404).json({ detail: 'Metronome sound not found' });
+    return;
+  }
+  const soundPath = ensureMetronomeSound(filename);
+  res.sendFile(soundPath);
 });
 
 app.use('/static', express.static(STATIC_DIR));
@@ -190,10 +203,8 @@ advancedRouter.get('/api/debug-paths', async (_req: Request, res: Response) => {
   try {
     const mExists = fs.existsSync(METRONOMES_DIR);
     const mFiles = mExists ? fs.readdirSync(METRONOMES_DIR) : [];
-    const [ffmpegPath, ffprobePath] = await Promise.all([
-      whichBinary('ffmpeg'),
-      whichBinary('ffprobe'),
-    ]);
+    const ffmpegPath = FFMPEG_BIN !== 'ffmpeg' ? FFMPEG_BIN : await whichBinary('ffmpeg');
+    const ffprobePath = FFPROBE_BIN !== 'ffprobe' ? FFPROBE_BIN : await whichBinary('ffprobe');
 
     res.json({
       cwd: process.cwd(),
@@ -254,11 +265,7 @@ advancedRouter.post(
         return;
       }
 
-      const clickSoundPath = path.resolve(METRONOMES_DIR, soundType);
-      if (!clickSoundPath.startsWith(METRONOMES_DIR + path.sep) || !fs.existsSync(clickSoundPath)) {
-        res.status(404).json({ detail: `Metronome sound '${soundType}' not found.` });
-        return;
-      }
+      const clickSoundPath = ensureMetronomeSound(soundType || 'Perc_Stick_hi.wav');
 
       const clicks = await detectClicksFromFile(uploadedFile.path, bpm);
       const { duration } = await getAudioInfo(uploadedFile.path);
@@ -326,10 +333,7 @@ advancedRouter.post(
         if (trackInfo.replaceClicks && Array.isArray(trackInfo.replaceClicks)) {
           const { duration } = await getAudioInfo(trackPath);
           const safeSound = path.basename(trackInfo.selectedSound || 'Perc_Stick_hi.wav');
-          const clickSoundPath = path.join(METRONOMES_DIR, safeSound);
-          const resolvedClickSound = fs.existsSync(clickSoundPath)
-            ? clickSoundPath
-            : path.join(METRONOMES_DIR, 'Perc_Stick_hi.wav');
+          const resolvedClickSound = ensureMetronomeSound(safeSound);
 
           const metronomePath = path.join(
             ADVANCED_TEMP_DIR,
